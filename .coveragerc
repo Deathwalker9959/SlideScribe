@@ -1,0 +1,31 @@
+[run]
+source = backend
+omit = 
+    */tests/*
+    */venv/*
+    */.venv/*
+    */migrations/*
+    */manage.py
+    */settings/*
+    */wsgi.py
+    */asgi.py
+    */conftest.py
+    */__pycache__/*
+    .git/*
+    */site-packages/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if self.debug:
+    if settings.DEBUG
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if __name__ == .__main__.:
+    class .*\(Protocol\):
+    @(abc\.)?abstractmethod
+
+[html]
+directory = htmlcov

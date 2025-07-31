@@ -1,0 +1,115 @@
+version: '3.8'
+
+services:
+  # AI Text Refinement Service
+  ai-refinement:
+    build: ./services/ai-refinement
+    ports:
+      - "8001:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    volumes:
+      - ./shared:/app/shared
+      - ../.env:/app/.env
+    networks:
+      - pptx-network
+    restart: unless-stopped
+
+  # Azure TTS Service
+  tts-service:
+    build: ./services/tts-service
+    ports:
+      - "8002:8000"
+    environment:
+      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY}
+      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION}
+      - DATABASE_URL=${DATABASE_URL}
+    volumes:
+      - ./shared:/app/shared
+      - ./media:/app/media
+      - ../.env:/app/.env
+    networks:
+      - pptx-network
+    restart: unless-stopped
+
+  # Subtitle Service
+  subtitle-service:
+    build: ./services/subtitle-service
+    ports:
+      - "8003:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    volumes:
+      - ./shared:/app/shared
+      - ./media:/app/media
+      - ../.env:/app/.env
+    networks:
+      - pptx-network
+    restart: unless-stopped
+
+  # File Processing Service
+  file-service:
+    build: ./services/file-service
+    ports:
+      - "8004:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    volumes:
+      - ./shared:/app/shared
+      - ./media:/app/media
+      - ../.env:/app/.env
+    networks:
+      - pptx-network
+    restart: unless-stopped
+
+  # API Gateway
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - AI_REFINEMENT_URL=http://ai-refinement:8000
+      - TTS_SERVICE_URL=http://tts-service:8000
+      - SUBTITLE_SERVICE_URL=http://subtitle-service:8000
+      - FILE_SERVICE_URL=http://file-service:8000
+    depends_on:
+      - ai-refinement
+      - tts-service
+      - subtitle-service
+      - file-service
+    networks:
+      - pptx-network
+    restart: unless-stopped
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=pptx_tts
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ../.env:/app/.env
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - pptx-network
+    restart: unless-stopped
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - pptx-network
+    restart: unless-stopped
+
+networks:
+  pptx-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

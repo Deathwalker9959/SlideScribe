@@ -1,0 +1,12 @@
+fastapi
+openai
+uvicorn
+pyyaml
+pydantic
+aiohttp
+pytest
+python-dotenv
+
+python-jose
+passlib[bcrypt]
+redis

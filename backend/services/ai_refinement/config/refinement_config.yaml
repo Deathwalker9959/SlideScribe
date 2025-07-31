@@ -1,0 +1,126 @@
+# AI Text Refinement Configuration
+refinement_steps:
+  grammar_check:
+    name: "Grammar and Spelling Check"
+    description: "Fix grammatical errors, spelling mistakes, and punctuation"
+    system_prompt: |
+      You are an expert grammar and spelling checker. Your task is to:
+      1. Fix grammatical errors
+      2. Correct spelling mistakes
+      3. Improve punctuation
+      4. Maintain the original meaning and tone
+      5. Return only the corrected text without explanations
+    temperature: 0.1
+    max_tokens: 2000
+    enabled: true
+    
+  clarity_enhancement:
+    name: "Clarity Enhancement"
+    description: "Improve text clarity and readability"
+    system_prompt: |
+      You are an expert writing coach. Your task is to:
+      1. Improve sentence structure for better readability
+      2. Eliminate redundancy and wordiness
+      3. Use active voice where appropriate
+      4. Ensure clear and concise communication
+      5. Maintain the original meaning and professional tone
+      6. Return only the improved text without explanations
+    temperature: 0.3
+    max_tokens: 2000
+    enabled: true
+    
+  professional_tone:
+    name: "Professional Tone Adjustment"
+    description: "Adjust tone to be more professional and presentation-appropriate"
+    system_prompt: |
+      You are an expert business communication specialist. Your task is to:
+      1. Adjust the tone to be professional and presentation-appropriate
+      2. Use formal language suitable for business presentations
+      3. Ensure the language is confident and authoritative
+      4. Remove casual expressions and slang
+      5. Maintain engagement while being professional
+      6. Return only the refined text without explanations
+    temperature: 0.2
+    max_tokens: 2000
+    enabled: true
+    
+  conciseness:
+    name: "Conciseness Optimization"
+    description: "Make text more concise for presentation slides"
+    system_prompt: |
+      You are an expert presentation coach. Your task is to:
+      1. Make the text more concise and impactful for slides
+      2. Remove unnecessary words and phrases
+      3. Use bullet points and short sentences where appropriate
+      4. Ensure key messages are clear and memorable
+      5. Maintain all important information
+      6. Return only the optimized text without explanations
+    temperature: 0.2
+    max_tokens: 1500
+    enabled: true
+    
+  audience_adaptation:
+    name: "Audience-Specific Adaptation"
+    description: "Adapt language and complexity for target audience"
+    system_prompt: |
+      You are an expert communication strategist. Your task is to:
+      1. Adapt the language complexity for the specified audience level
+      2. Use appropriate terminology and examples
+      3. Ensure the content is accessible to the target audience
+      4. Maintain technical accuracy while improving comprehension
+      5. Adjust formality level as needed
+      6. Return only the adapted text without explanations
+    temperature: 0.3
+    max_tokens: 2000
+    enabled: false  # Disabled by default, can be enabled based on user preference
+    audience_levels:
+      - "executive"
+      - "technical"
+      - "general"
+      - "academic"
+
+# Default refinement pipeline
+default_pipeline:
+  - "grammar_check"
+  - "clarity_enhancement"
+  - "professional_tone"
+  - "conciseness"
+
+# Custom pipelines for different content types
+content_type_pipelines:
+  title:
+    - "grammar_check"
+    - "conciseness"
+    - "professional_tone"
+    
+  bullet_points:
+    - "grammar_check"
+    - "conciseness"
+    
+  body_text:
+    - "grammar_check"
+    - "clarity_enhancement"
+    - "professional_tone"
+    
+  conclusion:
+    - "grammar_check"
+    - "clarity_enhancement"
+    - "professional_tone"
+
+# AI Model Configuration
+ai_models:
+  primary:
+    provider: "openai"
+    model: "gpt-4"
+    api_version: "2023-12-01-preview"
+    
+  fallback:
+    provider: "azure_openai"
+    model: "gpt-35-turbo"
+    api_version: "2023-12-01-preview"
+
+# Quality thresholds
+quality_metrics:
+  min_improvement_score: 0.1  # Minimum improvement to suggest changes
+  max_length_increase: 1.2    # Maximum 20% length increase
+  min_readability_score: 60   # Flesch Reading Ease score
