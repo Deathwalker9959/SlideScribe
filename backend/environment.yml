@@ -1,0 +1,41 @@
+name: slidescribe
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.13
+  - pip
+  - fastapi
+  - openai
+  - uvicorn
+  - pyyaml
+  - pydantic
+  - aiohttp
+  - pytest
+  - pytest-asyncio
+  - ruff
+  - python-multipart
+  - python-dotenv
+  - passlib
+  - redis
+  - psycopg2-binary
+  - sqlalchemy
+  - alembic
+  - pip:
+      - fastapi
+      - openai
+      - uvicorn
+      - pyyaml
+      - pydantic
+      - aiohttp
+      - pytest
+      - pytest-asyncio
+      - ruff
+      - python-multipart
+      - python-dotenv
+      - passlib[bcrypt]
+      - python-jose[cryptography]
+      - redis
+      - psycopg2-binary
+      - sqlalchemy
+      - alembic
