@@ -1,9 +1,11 @@
 from enum import Enum
 
+
 class VoiceGender(str, Enum):
     MALE = "male"
     FEMALE = "female"
     NEUTRAL = "neutral"
+
 
 class TextRefinementType(str, Enum):
     GRAMMAR = "grammar"
@@ -11,6 +13,7 @@ class TextRefinementType(str, Enum):
     TONE = "tone"
     CLARITY = "clarity"
     FORMALITY = "formality"
+
 
 class ExportFormat(str, Enum):
     MP4 = "mp4"

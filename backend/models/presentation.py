@@ -1,19 +1,24 @@
+from datetime import datetime
+from typing import Any
+
+from enums import ExportFormat
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
-from .enums import ExportFormat
+
 
 class SlideContent(BaseModel):
     slide_id: str
-    title: Optional[str] = None
+    title: str | None = None
     content: str
-    notes: Optional[str] = None
-    animations: List[Dict[str, Any]] = []
-    layout: Optional[str] = None
+    notes: str | None = None
+    animations: list[dict[str, Any]] = []
+    layout: str | None = None
+
 
 class PresentationRequest(BaseModel):
-    slides: List[SlideContent]
-    settings: Dict[str, Any] = {}
-    metadata: Dict[str, Any] = {}
+    slides: list[SlideContent]
+    settings: dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
+
 
 class ExportRequest(BaseModel):
     presentation_id: str
@@ -22,10 +27,11 @@ class ExportRequest(BaseModel):
     include_subtitles: bool = False
     quality: str = Field(default="high", pattern="^(low|medium|high)$")
 
+
 class ExportResponse(BaseModel):
     export_id: str
     download_url: str
     file_size: int
     export_format: ExportFormat
-    created_at: 'datetime'
-    expires_at: 'datetime'
+    created_at: datetime
+    expires_at: datetime
