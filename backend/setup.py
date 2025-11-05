@@ -1,12 +1,12 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 setup(
-    name="backend",
+    name="slidescribe-backend",
     version="0.1.0",
     packages=find_packages(),
     install_requires=[],
     include_package_data=True,
     description="Backend package for SlideScribe (AI refinement and TTS)",
-    author="Your Name",
-    author_email="your@email.com",
+    author="Andreas Malathouras",
+    author_email="steelstridertgm@gmail.com",
 )

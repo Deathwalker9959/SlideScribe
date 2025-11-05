@@ -1,105 +1,95 @@
 """
 HTTP client utilities for inter-service communication.
 """
+
+import asyncio
+from typing import Any
+
 import aiohttp
-from typing import Optional, Dict, Any
 
 
 class AsyncHTTPClient:
     """Async HTTP client for inter-service communication."""
-    
+
     def __init__(self, timeout: int = 30) -> None:
-        """
-        Initialize HTTP client.
-        
-        Args:
-            timeout: Request timeout in seconds
-        """
+        """Initialize HTTP client."""
         self.timeout = aiohttp.ClientTimeout(total=timeout)
-        self.session: Optional[aiohttp.ClientSession] = None
-    
-    async def __aenter__(self) -> 'AsyncHTTPClient':
+        self.session: aiohttp.ClientSession | None = None
+
+    async def __aenter__(self) -> "AsyncHTTPClient":
         """Enter async context manager."""
         self.session = aiohttp.ClientSession(timeout=self.timeout)
         return self
-    
+
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Exit async context manager."""
         if self.session:
             await self.session.close()
-    
-    async def get(self, url: str, headers: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Perform GET request.
-        
-        Args:
-            url: Request URL
-            headers: Optional request headers
-            
-        Returns:
-            JSON response as dictionary
-        """
+
+    @staticmethod
+    async def _prepare_request(coro_or_ctx: Any) -> Any:
+        """Normalize aiohttp request result to an async context manager."""
+        if asyncio.iscoroutine(coro_or_ctx):
+            return await coro_or_ctx
+        return coro_or_ctx
+
+    @staticmethod
+    async def _ensure_response_ok(response: Any) -> None:
+        """Invoke raise_for_status, awaiting when necessary."""
+        result = response.raise_for_status()
+        if asyncio.iscoroutine(result):
+            await result
+
+    async def get(self, url: str, headers: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Perform GET request."""
         if not self.session:
             raise RuntimeError("HTTP client not initialized. Use async context manager.")
-            
-        async with self.session.get(url, headers=headers) as response:
-            response.raise_for_status()
+
+        request_ctx = await self._prepare_request(self.session.get(url, headers=headers))
+        async with request_ctx as response:
+            await self._ensure_response_ok(response)
             return await response.json()
-    
-    async def post(self, url: str, data: Optional[Dict[str, Any]] = None, 
-                   headers: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Perform POST request.
-        
-        Args:
-            url: Request URL
-            data: Request data as dictionary
-            headers: Optional request headers
-            
-        Returns:
-            JSON response as dictionary
-        """
+
+    async def post(
+        self,
+        url: str,
+        data: dict[str, Any] | None = None,
+        headers: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Perform POST request."""
         if not self.session:
             raise RuntimeError("HTTP client not initialized. Use async context manager.")
-            
-        async with self.session.post(url, json=data, headers=headers) as response:
-            response.raise_for_status()
+
+        request_ctx = await self._prepare_request(
+            self.session.post(url, json=data, headers=headers)
+        )
+        async with request_ctx as response:
+            await self._ensure_response_ok(response)
             return await response.json()
-    
-    async def put(self, url: str, data: Optional[Dict[str, Any]] = None, 
-                  headers: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Perform PUT request.
-        
-        Args:
-            url: Request URL
-            data: Request data as dictionary
-            headers: Optional request headers
-            
-        Returns:
-            JSON response as dictionary
-        """
+
+    async def put(
+        self,
+        url: str,
+        data: dict[str, Any] | None = None,
+        headers: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Perform PUT request."""
         if not self.session:
             raise RuntimeError("HTTP client not initialized. Use async context manager.")
-            
-        async with self.session.put(url, json=data, headers=headers) as response:
-            response.raise_for_status()
+
+        request_ctx = await self._prepare_request(
+            self.session.put(url, json=data, headers=headers)
+        )
+        async with request_ctx as response:
+            await self._ensure_response_ok(response)
             return await response.json()
-    
-    async def delete(self, url: str, headers: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Perform DELETE request.
-        
-        Args:
-            url: Request URL
-            headers: Optional request headers
-            
-        Returns:
-            JSON response as dictionary
-        """
+
+    async def delete(self, url: str, headers: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Perform DELETE request."""
         if not self.session:
             raise RuntimeError("HTTP client not initialized. Use async context manager.")
-            
-        async with self.session.delete(url, headers=headers) as response:
-            response.raise_for_status()
+
+        request_ctx = await self._prepare_request(self.session.delete(url, headers=headers))
+        async with request_ctx as response:
+            await self._ensure_response_ok(response)
             return await response.json()

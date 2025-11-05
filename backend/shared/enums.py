@@ -1,11 +1,13 @@
 """
 Enums and constants used across the application.
 """
+
 from enum import Enum
 
 
 class VoiceGender(str, Enum):
     """Available voice genders for TTS."""
+
     MALE = "male"
     FEMALE = "female"
     NEUTRAL = "neutral"
@@ -13,6 +15,7 @@ class VoiceGender(str, Enum):
 
 class TextRefinementType(str, Enum):
     """Types of text refinement available."""
+
     GRAMMAR = "grammar"
     STYLE = "style"
     TONE = "tone"
@@ -22,6 +25,7 @@ class TextRefinementType(str, Enum):
 
 class ExportFormat(str, Enum):
     """Available export formats for presentations."""
+
     MP4 = "mp4"
     PPTX = "pptx"
     AUDIO_MP3 = "mp3"
@@ -30,6 +34,7 @@ class ExportFormat(str, Enum):
 
 class ContentType(str, Enum):
     """Types of content for refinement."""
+
     TITLE = "title"
     BULLET_POINTS = "bullet_points"
     BODY_TEXT = "body_text"
@@ -38,6 +43,7 @@ class ContentType(str, Enum):
 
 class AudienceLevel(str, Enum):
     """Target audience levels."""
+
     EXECUTIVE = "executive"
     TECHNICAL = "technical"
     GENERAL = "general"
