@@ -1,12 +1,16 @@
 import pytest
-from backend.services.queue import QueueManager
+
+from services.queue import QueueManager
+
 
 @pytest.fixture
 def queue():
     return QueueManager()
 
+
 def test_enqueue_dequeue():
-    from backend.services.queue import QueueManager
+    from services.queue import QueueManager
+
     queue = QueueManager()
     key = "test_queue"
     value = "test_value"
@@ -15,8 +19,10 @@ def test_enqueue_dequeue():
     if result:
         assert result == value
 
+
 def test_queue_length():
-    from backend.services.queue import QueueManager
+    from services.queue import QueueManager
+
     queue = QueueManager()
     key = "test_queue_len"
     queue.enqueue(key, "v1")
