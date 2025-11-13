@@ -5,6 +5,7 @@ channels:
 dependencies:
   - python=3.13
   - pip
+  - numpy
   - fastapi
   - openai
   - uvicorn
@@ -33,6 +34,7 @@ dependencies:
       - ruff
       - python-multipart
       - python-dotenv
+      - pydub
       - passlib[bcrypt]
       - python-jose[cryptography]
       - redis

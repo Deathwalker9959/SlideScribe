@@ -1,0 +1,15 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../build-smoke",
+    "module": "commonjs",
+    "target": "es2019",
+    "noEmitOnError": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true
+  },
+  "include": [
+    "embedNarration.smoke.ts",
+    "../src/taskpane/utils/embedNarration.ts"
+  ]
+}

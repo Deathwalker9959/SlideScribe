@@ -8,6 +8,7 @@ from fastapi.responses import PlainTextResponse
 
 from services.auth import oauth2_scheme
 from services.subtitles.generator import SubtitleGenerator
+from services.subtitles.validator import SubtitleValidator, SubtitleValidationError
 from shared.models import (
     APIResponse,
     SubtitleConvertRequest,
@@ -35,8 +36,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize subtitle generator
+# Initialize subtitle generator and validator
 subtitle_generator = SubtitleGenerator()
+subtitle_validator = SubtitleValidator(
+    min_duration=0.5,
+    max_duration=10.0,
+    max_chars_per_subtitle=100,
+    min_gap_between_subtitles=0.1,
+)
 
 
 @app.get("/health")
@@ -235,76 +242,71 @@ async def validate_subtitles(
 ) -> dict:
     """Validate subtitle entries for formatting and timing issues.
 
-    Checks for common issues like:
-    - Overlapping timing
-    - Text too long for display duration
-    - Missing timing information
-    - Formatting inconsistencies
+    Uses comprehensive validation including:
+    - Ordering checks (index and time)
+    - Overlap detection
+    - Duration constraints
+    - Text length validation
+    - Gap analysis
+
+    Returns detailed validation report with violations and warnings.
     """
     try:
-        validation_results = {
-            "valid": True,
-            "issues": [],
-            "warnings": [],
-            "statistics": {
-                "total_subtitles": len(request.subtitles),
-                "total_duration": 0.0,
-                "average_duration": 0.0,
-                "max_line_length": 0,
-            },
-        }
+        # Use comprehensive subtitle validator
+        strict = request.strict if hasattr(request, "strict") else False
+        validation_results = subtitle_validator.validate(request.subtitles, strict=strict)
 
-        subtitles = request.subtitles
-
-        if not subtitles:
-            validation_results["warnings"].append("No subtitles provided")
-            return validation_results
-
-        total_duration = 0.0
-        max_line_length = 0
-
-        for i, subtitle in enumerate(subtitles):
-            # Check timing
-            if subtitle.start_time >= subtitle.end_time:
-                validation_results["valid"] = False
-                validation_results["issues"].append(
-                    f"Subtitle {subtitle.index}: Start time must be before end time"
-                )
-
-            # Check for overlaps with previous subtitle
-            if i > 0:
-                prev_subtitle = subtitles[i - 1]
-                if subtitle.start_time < prev_subtitle.end_time:
-                    validation_results["warnings"].append(
-                        f"Subtitle {subtitle.index}: Overlaps with previous subtitle"
-                    )
-
-            # Check text length
-            line_length = len(subtitle.text)
-            max_line_length = max(max_line_length, line_length)
-            duration = subtitle.end_time - subtitle.start_time
-
-            # Check reading speed (characters per second)
-            if duration > 0:
-                reading_speed = line_length / duration
-                if reading_speed > 21:  # ~21 chars/second is comfortable reading speed
-                    validation_results["warnings"].append(
-                        f"Subtitle {subtitle.index}: Text too long for duration ({reading_speed:.1f} chars/sec)"
-                    )
-
-            total_duration = max(total_duration, subtitle.end_time)
-
-        # Update statistics
-        validation_results["statistics"]["total_duration"] = total_duration
-        validation_results["statistics"]["average_duration"] = total_duration / len(subtitles) if subtitles else 0
-        validation_results["statistics"]["max_line_length"] = max_line_length
-
-        logger.info(f"Subtitle validation completed: {'PASS' if validation_results['valid'] else 'FAIL'}")
+        logger.info(
+            f"Subtitle validation completed: {'PASS' if validation_results['valid'] else 'FAIL'} "
+            f"({len(validation_results['violations'])} violations, {len(validation_results['warnings'])} warnings)"
+        )
         return validation_results
 
+    except SubtitleValidationError as e:
+        # Return validation errors as 400 with details
+        return {"valid": False, "violations": e.violations, "warnings": [], "error": str(e)}
     except Exception as e:
         logger.error(f"Failed to validate subtitles: {e}")
         raise HTTPException(status_code=500, detail=f"Validation failed: {e!s}") from e
+
+
+@app.post("/auto-fix")
+async def auto_fix_subtitles(
+    request: SubtitleValidationRequest,
+    token: str = Depends(oauth2_scheme)
+) -> dict:
+    """Automatically fix common subtitle issues.
+
+    Applies automatic fixes for:
+    - Re-indexing subtitles
+    - Sorting by start time
+    - Fixing overlaps
+    - Ensuring minimum duration
+
+    Returns fixed subtitles and a report of applied fixes.
+    """
+    try:
+        fixed_subtitles, fix_report = subtitle_validator.auto_fix(
+            request.subtitles, in_place=False
+        )
+
+        # Validate fixed subtitles
+        validation_results = subtitle_validator.validate(fixed_subtitles, strict=False)
+
+        logger.info(
+            f"Auto-fix applied {fix_report['fixes_applied']} fixes to "
+            f"{fix_report['subtitles_processed']} subtitles"
+        )
+
+        return {
+            "subtitles": [subtitle.model_dump() for subtitle in fixed_subtitles],
+            "fix_report": fix_report,
+            "validation_after_fix": validation_results,
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to auto-fix subtitles: {e}")
+        raise HTTPException(status_code=500, detail=f"Auto-fix failed: {e!s}") from e
 
 
 @app.post("/batch-process")

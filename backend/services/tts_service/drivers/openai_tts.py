@@ -96,3 +96,34 @@ class OpenAITTSEngine(TTSEngine):
 
         except Exception as e:
             raise Exception(f"OpenAI TTS synthesis failed: {e!s}") from e
+
+    async def synthesize_ssml(
+        self,
+        ssml: str,
+        output_format: str = "mp3",
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """
+        Synthesize speech from SSML using OpenAI TTS.
+
+        Note: OpenAI TTS doesn't natively support SSML, so we extract plain text.
+        SSML features like emphasis, pauses, and prosody will be ignored.
+        """
+        import re
+
+        # Extract plain text from SSML (very basic extraction)
+        # This is a fallback when SSML features are needed but driver doesn't support them
+        text_content = re.sub(r'<[^>]+>', '', ssml)
+        text_content = text_content.strip()
+
+        if not text_content:
+            raise ValueError("No text content found in SSML")
+
+        # Use regular synthesis with extracted text
+        return await self.synthesize(
+            text=text_content,
+            voice="alloy",  # Default voice for SSML fallback
+            speed=1.0,
+            output_format=output_format,
+            **kwargs
+        )

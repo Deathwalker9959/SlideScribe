@@ -1,0 +1,6 @@
+pipelines:
+  contextual_refinement:
+    enabled: true
+    use_image_analysis: true
+    include_callouts: true
+    include_transitions: true

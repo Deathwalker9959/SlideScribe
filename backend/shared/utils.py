@@ -1,12 +1,11 @@
 import hashlib
-import json
 import logging
-import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import aiohttp
+from shared.config import config
 
 
 def setup_logging(service_name: str, log_level: str = "INFO") -> logging.Logger:
@@ -163,39 +162,3 @@ def chunk_text(text: str, max_length: int = 500) -> list[str]:
         chunks.append(text[start:end])
         start = end
     return chunks
-
-
-class ServiceConfig:
-    """Configuration management for services"""
-
-    def __init__(self):
-        self.config = {}
-        self.load_from_env()
-
-    def load_from_env(self):
-        """Load configuration from environment variables"""
-        self.config = {
-            "openai_api_key": os.getenv("OPENAI_API_KEY"),
-            "azure_speech_key": os.getenv("AZURE_SPEECH_KEY"),
-            "azure_speech_region": os.getenv("AZURE_SPEECH_REGION"),
-            "azure_vision_endpoint": os.getenv("AZURE_VISION_ENDPOINT"),
-            "azure_vision_key": os.getenv("AZURE_VISION_KEY"),
-            "database_url": os.getenv("DATABASE_URL"),
-            "redis_url": os.getenv("REDIS_URL"),
-            "media_root": os.getenv("MEDIA_ROOT", "/app/media"),
-            "debug": os.getenv("DEBUG", "false").lower() == "true",
-            "allowed_origins": json.loads(os.getenv("ALLOWED_ORIGINS", '["*"]')),
-            "image_analysis_provider": os.getenv("IMAGE_ANALYSIS_PROVIDER", "stub"),
-            "image_analysis_cache_ttl": int(os.getenv("IMAGE_ANALYSIS_CACHE_TTL", "3600")),
-            "image_analysis_openai_model": os.getenv("IMAGE_ANALYSIS_OPENAI_MODEL", "gpt-4o-mini"),
-        }
-
-    def get(self, key: str, default: Any = None) -> Any:
-        return self.config.get(key, default)
-
-    def set(self, key: str, value: Any) -> None:
-        self.config[key] = value
-
-
-# Global configuration instance
-config = ServiceConfig()

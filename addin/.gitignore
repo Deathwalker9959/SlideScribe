@@ -3,6 +3,7 @@
 # Build outputs
 dist/
 lib/
+build-smoke/
 *.js.map
 *.css.map
 

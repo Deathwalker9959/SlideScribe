@@ -153,6 +153,147 @@
   color: #dbeafe;
 }
 
+.script-editor__context-meta {
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+.script-editor__context-section--audio {
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  padding-top: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.script-editor__context-icon {
+  width: 0.9rem;
+  height: 0.9rem;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+  color: #93c5fd;
+}
+
+.script-editor__images-card {
+  background: #111827;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.script-editor__exports-card {
+  background: #111827;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.6rem;
+  color: #e2e8f0;
+}
+
+.script-editor__images-icon {
+  width: 0.9rem;
+  height: 0.9rem;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+.script-editor__exports-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.script-editor__exports-format {
+  font-weight: 600;
+  color: #bfdbfe;
+  margin-right: 0.5rem;
+}
+
+.script-editor__exports-size,
+.script-editor__exports-created {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  margin-right: 0.5rem;
+}
+
+.script-editor__exports-link,
+.script-editor__link {
+  color: #60a5fa;
+  font-size: 0.8rem;
+  text-decoration: none;
+  margin-right: 0.5rem;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.script-editor__images-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.script-editor__images-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.script-editor__images-subtitle {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.script-editor__images-actions input[type='file'] {
+  color: #e2e8f0;
+  font-size: 0.8rem;
+}
+
+.script-editor__images-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.script-editor__images-empty {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.script-editor__images-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(17, 24, 39, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+
+  strong {
+    display: block;
+    font-size: 0.85rem;
+    color: #e2e8f0;
+  }
+
+  span {
+    font-size: 0.72rem;
+    color: #94a3b8;
+  }
+}
+
+.script-editor__images-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
 .script-editor__context-header {
   display: flex;
   justify-content: space-between;

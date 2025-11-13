@@ -19,6 +19,18 @@ class VoiceProfileNotFoundError(Exception):
     """Raised when a requested voice profile cannot be found."""
 
 
+STORAGE_VERSION = 2
+PREFERRED_SETTING_KEYS = {
+    "provider",
+    "voice",
+    "language",
+    "speed",
+    "pitch",
+    "volume",
+    "tone",
+}
+
+
 class VoiceProfileManager:
     """Manage creation, retrieval, and application of voice profiles."""
 
@@ -31,6 +43,7 @@ class VoiceProfileManager:
 
         self._cache = Cache()
         self._profiles: dict[str, VoiceProfile] = {}
+        self._preferred_settings: dict[str, dict[str, Any]] = {}
         self._load_profiles()
 
     def _cache_key(self, profile_id: str) -> str:
@@ -44,7 +57,14 @@ class VoiceProfileManager:
 
         try:
             raw = self.storage_path.read_text(encoding="utf-8")
-            records = json.loads(raw)
+            data = json.loads(raw)
+            if isinstance(data, dict):
+                records = data.get("profiles", [])
+                preferred_settings = data.get("preferred_settings", {})
+            else:
+                records = data
+                preferred_settings = {}
+
             for record in records:
                 try:
                     profile = VoiceProfile.model_validate(record)
@@ -52,16 +72,55 @@ class VoiceProfileManager:
                     self._cache.set(self._cache_key(profile.id), profile.model_dump(), ttl=self.CACHE_TTL_SECONDS)
                 except Exception as exc:  # pragma: no cover - defensive
                     logger.warning("Skipping invalid voice profile record: %s", exc)
+
+            if isinstance(preferred_settings, dict):
+                sanitized_preferences: dict[str, dict[str, Any]] = {}
+                for key, value in preferred_settings.items():
+                    if not isinstance(key, str) or not isinstance(value, dict):
+                        continue
+                    sanitized_preferences[key] = {
+                        pref_key: pref_value
+                        for pref_key, pref_value in value.items()
+                        if pref_key in PREFERRED_SETTING_KEYS or pref_key in {"updated_at"}
+                    }
+                self._preferred_settings = sanitized_preferences
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Failed to load voice profiles from %s: %s", self.storage_path, exc)
 
     def _persist_profiles(self) -> None:
         """Persist current profiles to storage."""
         try:
-            serialisable = [profile.model_dump(mode="json") for profile in self._profiles.values()]
-            self.storage_path.write_text(json.dumps(serialisable, indent=2), encoding="utf-8")
+            payload = {
+                "version": STORAGE_VERSION,
+                "profiles": [profile.model_dump(mode="json") for profile in self._profiles.values()],
+                "preferred_settings": self._preferred_settings,
+            }
+            self.storage_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Failed to persist voice profiles: %s", exc)
+
+    @staticmethod
+    def _binding_key(owner_id: str | None, presentation_id: str | None) -> str | None:
+        if not owner_id and not presentation_id:
+            return None
+        owner_part = owner_id or "*"
+        presentation_part = presentation_id or "*"
+        return f"{owner_part}::{presentation_part}"
+
+    @staticmethod
+    def _binding_candidates(owner_id: str | None, presentation_id: str | None) -> list[str]:
+        """Return preference lookup keys ordered from most specific to least."""
+        owner_part = owner_id or None
+        presentation_part = presentation_id or None
+        candidates: list[str] = []
+        if owner_part and presentation_part:
+            candidates.append(f"{owner_part}::{presentation_part}")
+        if owner_part:
+            candidates.append(f"{owner_part}::*")
+        if presentation_part:
+            candidates.append(f"*::{presentation_part}")
+        candidates.append("*::*")
+        return candidates
 
     async def create_profile(self, profile_data: VoiceProfileRequest) -> VoiceProfile:
         """Create a new voice profile and persist it."""
@@ -167,9 +226,54 @@ class VoiceProfileManager:
         logger.debug("Generated TTS request using profile %s", profile.id)
         return tts_request
 
+    async def get_preferred_settings(
+        self,
+        owner_id: str | None,
+        presentation_id: str | None,
+    ) -> dict[str, Any] | None:
+        """Return persisted preferred narration settings for the given scope."""
+        for candidate in self._binding_candidates(owner_id, presentation_id):
+            settings = self._preferred_settings.get(candidate)
+            if settings:
+                filtered = {key: settings[key] for key in PREFERRED_SETTING_KEYS if key in settings}
+                if filtered:
+                    return filtered
+        return None
+
+    async def set_preferred_settings(
+        self,
+        owner_id: str | None,
+        presentation_id: str | None,
+        settings: dict[str, Any],
+    ) -> None:
+        """Persist preferred narration settings for a scope."""
+        binding_key = self._binding_key(owner_id, presentation_id)
+        if not binding_key:
+            return
+
+        normalised = {
+            key: settings[key]
+            for key in PREFERRED_SETTING_KEYS
+            if key in settings and settings[key] is not None
+        }
+        if not normalised:
+            return
+
+        normalised["updated_at"] = datetime.now(UTC).isoformat()
+        self._preferred_settings[binding_key] = normalised
+        self._persist_profiles()
+
+    async def clear_preferred_settings(self, owner_id: str | None, presentation_id: str | None) -> None:
+        """Remove persisted preferred settings for a scope."""
+        binding_key = self._binding_key(owner_id, presentation_id)
+        if binding_key and binding_key in self._preferred_settings:
+            del self._preferred_settings[binding_key]
+            self._persist_profiles()
+
     async def delete_all(self) -> None:
         """Remove all profiles (primarily for testing)."""
         self._profiles.clear()
         self._cache.clear()
+        self._preferred_settings.clear()
         if self.storage_path.exists():
             self.storage_path.unlink()

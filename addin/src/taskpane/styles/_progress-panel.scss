@@ -257,6 +257,32 @@
   text-transform: capitalize;
 }
 
+.progress-panel__context-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-right: 0.3rem;
+  vertical-align: middle;
+  color: #93c5fd;
+}
+
+.progress-panel__audio-stats {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: #cbd5f5;
+}
+
+.progress-panel__link {
+  color: #93c5fd;
+  text-decoration: none;
+  font-size: 0.78rem;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
 .progress-panel__empty {
   margin: 0;
   color: #9ca3af;

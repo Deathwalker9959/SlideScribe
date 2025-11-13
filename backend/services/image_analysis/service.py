@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -200,6 +201,48 @@ class ImageAnalysisService:
         if image.analysis and image.analysis.text_snippets:
             text_snippets = self._merge_unique(text_snippets, image.analysis.text_snippets)
 
+        chart_insights = list(metadata.get("chart_insights", [])) if metadata else []
+        table_insights = list(metadata.get("table_insights", [])) if metadata else []
+        callouts = list(metadata.get("callouts", [])) if metadata else []
+        data_points = list(metadata.get("data_points", [])) if metadata else []
+
+        lowercase_tokens = {token.lower() for token in (*tags, caption.split())}
+        chart_keywords = {"chart", "graph", "diagram", "plot", "visual"}
+        if any(keyword in lowercase_tokens for keyword in chart_keywords):
+            if "Invite the audience to look at the chart or graph while you summarize the takeaway." not in chart_insights:
+                chart_insights.append(
+                    "Invite the audience to look at the chart or graph while you summarize the takeaway."
+                )
+            if "Narration cue: direct attention to the visual and state the key trend in one sentence." not in callouts:
+                callouts.append(
+                    "Narration cue: direct attention to the visual and state the key trend in one sentence."
+                )
+        if any(keyword in lowercase_tokens for keyword in {"table", "grid"}):
+            if "Point the audience to the table while you highlight the most important comparison." not in table_insights:
+                table_insights.append(
+                    "Point the audience to the table while you highlight the most important comparison."
+                )
+            if "Narration cue: reference the table briefly and call out the one figure that matters most." not in callouts:
+                callouts.append(
+                    "Narration cue: reference the table briefly and call out the one figure that matters most."
+                )
+        if not tags and not description_components:
+            callouts.append("Narration cue: acknowledge the visual briefly or skip it if it does not support the story.")
+
+        include_callouts = service_config.get_pipeline_value(
+            "pipelines.contextual_refinement.include_callouts",
+            True,
+        )
+        if not include_callouts:
+            callouts = []
+
+        extracted_numbers = re.findall(r"\b\d+(?:\.\d+)?%?", " ".join(description_components))
+        if extracted_numbers:
+            for value in extracted_numbers:
+                formatted = f"Emphasize the value {value}"
+                if formatted not in data_points:
+                    data_points.append(formatted)
+
         dominant_colors = image.dominant_colors or metadata.get("dominant_colors", [])
 
         confidence = image.analysis.confidence if image.analysis else 0.6
@@ -220,6 +263,10 @@ class ImageAnalysisService:
             tags=tags,
             objects=image.detected_objects,
             text_snippets=text_snippets,
+            chart_insights=chart_insights,
+            table_insights=table_insights,
+            data_points=data_points,
+            callouts=callouts,
             dominant_colors=dominant_colors,
             raw_metadata=raw_metadata,
         )

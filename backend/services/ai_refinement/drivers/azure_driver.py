@@ -1,35 +1,41 @@
-import os
+"""Azure OpenAI driver for AI refinement using v1 API pattern."""
+
+from __future__ import annotations
+
 from typing import Any
 
-import aiohttp
+from shared.azure_openai_client import create_azure_openai_client, get_azure_deployment_name
 
 from .base import AIRefinementDriver
 
 
 class AzureOpenAIRefinementDriver(AIRefinementDriver):
+    """Azure OpenAI implementation following Microsoft's v1 API pattern."""
+
+    def __init__(self):
+        """Initialize Azure OpenAI client with v1 API endpoint."""
+        # Use shared builder to create client (eliminates duplication)
+        self.client = create_azure_openai_client(async_client=True)
+
     async def refine(self, text: str, step_config: dict[str, Any], **kwargs: Any) -> str:
-        api_key = os.getenv("AZURE_OPENAI_KEY")
-        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-        deployment = step_config.get("model", "gpt-35-turbo")
-        api_version = step_config.get("api_version", "2023-12-01-preview")
+        """Refine text using Azure OpenAI with deployment name."""
+        # For Azure, use deployment name instead of model name
+        deployment = get_azure_deployment_name(step_config.get("model"))
         system_prompt = step_config.get("system_prompt", "Refine this text.")
         temperature = step_config.get("temperature", 0.3)
         max_tokens = step_config.get("max_tokens", 2000)
-        url = (
-            f"{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={api_version}"
-        )
-        headers: dict[str, str] = {"api-key": str(api_key), "Content-Type": "application/json"}
-        payload: dict[str, Any] = {
-            "messages": [
+
+        response = await self.client.chat.completions.create(
+            model=deployment,  # Deployment name for Azure
+            messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": text},
             ],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-        async with (
-            aiohttp.ClientSession() as session,
-            session.post(url, json=payload, headers=headers) as resp,
-        ):
-            data = await resp.json()
-            return data["choices"][0]["message"]["content"].strip()
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        content = response.choices[0].message.content
+        if content is not None:
+            return content.strip()
+        return ""

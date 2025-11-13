@@ -31,7 +31,8 @@ module.exports = async (env, options) => {
       alias: {
         '@components': path.resolve(__dirname, 'src/taskpane/components'),
         '@ui': path.resolve(__dirname, 'src/taskpane/components/ui'),
-        '@styles': path.resolve(__dirname, 'src/taskpane/styles')
+        '@styles': path.resolve(__dirname, 'src/taskpane/styles'),
+        '@utils': path.resolve(__dirname, 'src/taskpane/utils')
       }
     },
     module: {

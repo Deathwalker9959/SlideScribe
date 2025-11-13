@@ -1,43 +1,58 @@
-import asyncio
+import pytest
 
-from fastapi.testclient import TestClient
-
-from backend.app import app
-from services.websocket_progress import websocket_manager
+from services.websocket_progress import WebSocketProgressManager
 
 
-def test_websocket_progress_subscription() -> None:
-    client = TestClient(app)
+class StubWebSocket:
+    def __init__(self) -> None:
+        self.accepted = False
+        self.closed = False
+        self.sent_messages = []
 
-    with client.websocket_connect("/ws/progress?client_id=test-client") as websocket:
-        handshake = websocket.receive_json()
-        assert handshake["event"] == "connected"
-        assert handshake["client_id"] == "test-client"
+    async def accept(self) -> None:
+        self.accepted = True
 
-        websocket.send_json({"action": "subscribe", "job_id": "job-123"})
-        ack = websocket.receive_json()
-        assert ack["event"] == "subscribed"
-        assert ack["job_id"] == "job-123"
+    async def close(self) -> None:
+        self.closed = True
 
-        loop = asyncio.new_event_loop()
-        try:
-            loop.run_until_complete(
-                websocket_manager.send_progress_update(
-                    "job-123",
-                    {
-                        "job_id": "job-123",
-                        "status": "processing",
-                        "progress": 0.5,
-                    },
-                )
-            )
-        finally:
-            loop.close()
+    async def send_json(self, message: dict) -> None:
+        self.sent_messages.append(message)
 
-        update = websocket.receive_json()
-        assert update["job_id"] == "job-123"
-        assert update["progress"] == 0.5
 
-        websocket.send_json({"action": "unsubscribe", "job_id": "job-123"})
-        ack = websocket.receive_json()
-        assert ack["event"] == "unsubscribed"
+@pytest.mark.asyncio
+async def test_websocket_manager_handles_unknown_jobs() -> None:
+    manager = WebSocketProgressManager()
+    websocket = StubWebSocket()
+
+    client_id = await manager.connect(websocket, "client-test")
+    assert websocket.accepted is True
+
+    await manager.subscribe(client_id, "job-existing")
+
+    await manager.send_progress_update("job-missing", {"job_id": "job-missing"})
+    assert websocket.sent_messages == []
+
+    await manager.unsubscribe(client_id, "job-missing")
+    await manager.send_progress_update("job-existing", {"job_id": "job-existing"})
+    assert websocket.sent_messages == [{"job_id": "job-existing"}]
+
+    await manager.disconnect(client_id)
+    assert websocket.closed is True
+
+
+@pytest.mark.asyncio
+async def test_websocket_manager_broadcast_and_unsubscribe() -> None:
+    manager = WebSocketProgressManager()
+    websocket = StubWebSocket()
+    client_id = await manager.connect(websocket, None)
+    await manager.subscribe(client_id, "job-456")
+
+    await manager.send_progress_update("job-456", {"job_id": "job-456", "progress": 0.25})
+    assert websocket.sent_messages == [{"job_id": "job-456", "progress": 0.25}]
+
+    await manager.unsubscribe(client_id, "job-456")
+    await manager.send_progress_update("job-456", {"job_id": "job-456", "progress": 0.5})
+    assert len(websocket.sent_messages) == 1
+
+    await manager.broadcast_system_message({"event": "ping"})
+    assert websocket.sent_messages[-1] == {"event": "ping"}

@@ -9,10 +9,12 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from services.ai_refinement import app as ai_refinement_module
+from services.analytics import app as analytics_module
 from services.audio_processing.app import app as audio_processing_app
 from services.auth import router as auth_router
 from services.image_analysis import app as image_analysis_module
 from services.narration import app as narration_module
+from services.ssml_builder import app as ssml_builder_module
 from services.subtitles import app as subtitles_module
 from services.tts_service import app as tts_module
 from services.websocket_progress import websocket_manager
@@ -23,11 +25,13 @@ logger = setup_logging("slidescribe-backend")
 
 # Get routers from the service apps
 ai_refinement_app = ai_refinement_module.app
+analytics_app = analytics_module.app
 narration_app = narration_module.app
 subtitles_app = subtitles_module.app
 tts_app = tts_module.app
 image_analysis_app = image_analysis_module.app
 voice_profiles_app = voice_profiles_app_instance
+ssml_builder_app = ssml_builder_module.app
 
 app = FastAPI(
     title="SlideScribe Backend API",
@@ -75,6 +79,14 @@ app = FastAPI(
         {
             "name": "Audio Processing",
             "description": "Audio processing service - mounted at /api/v1/audio",
+        },
+        {
+            "name": "SSML Builder",
+            "description": "SSML generation and pronunciation lexicon service - mounted at /api/v1/ssml",
+        },
+        {
+            "name": "Analytics",
+            "description": "Telemetry collection and export service for thesis research - mounted at /api/v1/analytics",
         },
     ],
 )
@@ -215,6 +227,40 @@ for route in audio_processing_app.routes:
             route_kwargs["response_model"] = route.response_model
         app.add_api_route(**route_kwargs)
 
+# Include SSML Builder routes with prefix
+for route in ssml_builder_app.routes:
+    if hasattr(route, "path") and hasattr(route, "endpoint"):
+        if route.path in EXCLUDED_PATHS:
+            continue
+        route_kwargs = {
+            "path": f"/api/v1/ssml{route.path}",
+            "endpoint": route.endpoint,
+            "methods": route.methods,
+            "tags": ["SSML Builder"],
+        }
+        if hasattr(route, "name"):
+            route_kwargs["name"] = f"ssml_{route.name}"
+        if hasattr(route, "response_model"):
+            route_kwargs["response_model"] = route.response_model
+        app.add_api_route(**route_kwargs)
+
+# Include Analytics routes with prefix
+for route in analytics_app.routes:
+    if hasattr(route, "path") and hasattr(route, "endpoint"):
+        if route.path in EXCLUDED_PATHS:
+            continue
+        route_kwargs = {
+            "path": f"/api/v1/analytics{route.path}",
+            "endpoint": route.endpoint,
+            "methods": route.methods,
+            "tags": ["Analytics"],
+        }
+        if hasattr(route, "name"):
+            route_kwargs["name"] = f"analytics_{route.name}"
+        if hasattr(route, "response_model"):
+            route_kwargs["response_model"] = route.response_model
+        app.add_api_route(**route_kwargs)
+
 
 @app.websocket("/ws/progress")
 async def websocket_progress_endpoint(websocket: WebSocket):
@@ -286,6 +332,21 @@ async def root():
                 "docs": "/api/v1/voice-profiles/docs",
                 "health": "/api/v1/voice-profiles/health",
             },
+            "audio_processing": {
+                "base_url": "/api/v1/audio",
+                "docs": "/api/v1/audio/docs",
+                "health": "/api/v1/audio/health",
+            },
+            "ssml_builder": {
+                "base_url": "/api/v1/ssml",
+                "docs": "/api/v1/ssml/docs",
+                "health": "/api/v1/ssml/health",
+            },
+            "analytics": {
+                "base_url": "/api/v1/analytics",
+                "docs": "/api/v1/analytics/docs",
+                "health": "/api/v1/analytics/health",
+            },
             "auth": {
                 "token_endpoint": "/token",
             },
@@ -310,6 +371,9 @@ async def health_check():
             "narration": "operational",
             "subtitles": "operational",
             "voice_profiles": "operational",
+            "audio_processing": "operational",
+            "ssml_builder": "operational",
+            "analytics": "operational",
         },
     }
 

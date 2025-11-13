@@ -53,6 +53,7 @@ class TTSRequest(BaseModel):
     volume: float = Field(default=1.0, ge=0.1, le=2.0, description="Volume level")
     output_format: str = Field(default="mp3", description="Output audio format")
     language: str = Field(default="en-US", description="Language code")
+    driver: str | None = Field(default=None, description="Preferred TTS driver identifier")
 
 
 class TTSResponse(BaseModel):
@@ -61,6 +62,25 @@ class TTSResponse(BaseModel):
     file_size: int
     voice_used: str
     processing_time: float
+    file_path: str | None = None
+
+
+class SSMLTTSRequest(BaseModel):
+    """Request for SSML-based TTS synthesis."""
+    ssml: str = Field(..., max_length=15000, description="SSML markup to convert to speech")
+    output_format: str = Field(default="mp3", description="Output audio format")
+    driver: str | None = Field(default=None, description="Preferred TTS driver identifier")
+    voice: str | None = Field(default=None, description="Voice override (if not in SSML)")
+
+
+class EnhancedTTSRequest(TTSRequest):
+    """Enhanced TTS request with SSML Builder integration."""
+    use_ssml_builder: bool = Field(default=False, description="Use SSML Builder for enhanced synthesis")
+    ssml_preset: str | None = Field(default=None, description="SSML preset name (news_anchor, storytelling, technical, casual)")
+    emphasis_words: list[str] = Field(default_factory=list, description="Words to emphasize")
+    pauses: dict[int, float] = Field(default_factory=dict, description="Character positions and pause durations")
+    lexicon_owner: str | None = Field(default=None, description="Pronunciation lexicon owner")
+    lexicon_scope: str = Field(default="presentation", description="Pronunciation lexicon scope")
 
 
 class SubtitleRequest(BaseModel):
@@ -106,6 +126,10 @@ class ImageAnalysis(BaseModel):
     tags: list[str] = Field(default_factory=list)
     objects: list[str] = Field(default_factory=list)
     text_snippets: list[str] = Field(default_factory=list)
+    chart_insights: list[str] = Field(default_factory=list)
+    table_insights: list[str] = Field(default_factory=list)
+    data_points: list[str] = Field(default_factory=list)
+    callouts: list[str] = Field(default_factory=list)
     dominant_colors: list[str] = Field(default_factory=list)
     raw_metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -219,6 +243,152 @@ class ExportResponse(BaseModel):
     expires_at: datetime
 
 
+class SSMLRequest(BaseModel):
+    """Request to generate SSML markup from text."""
+
+    text: str = Field(..., max_length=10000, description="Text to convert to SSML")
+    emphasis_words: list[str] = Field(default_factory=list, description="Words to emphasize")
+    pauses: dict[int, float] = Field(
+        default_factory=dict, description="Character positions and pause durations (in seconds)"
+    )
+    prosody_rate: float | None = Field(None, ge=0.5, le=2.0, description="Speech rate multiplier")
+    prosody_pitch: str | None = Field(None, description="Pitch adjustment (e.g., '+10%', '-5%')")
+    prosody_volume: str | None = Field(None, description="Volume adjustment (e.g., 'loud', 'soft')")
+    say_as_hints: dict[str, str] = Field(
+        default_factory=dict, description="Text fragments and their say-as types (e.g., 'cardinal', 'date')"
+    )
+    pronunciation_lexicon_id: str | None = Field(
+        None, description="ID of pronunciation lexicon to apply"
+    )
+
+
+class SSMLResponse(BaseModel):
+    """Response containing generated SSML markup."""
+
+    ssml: str = Field(..., description="Generated SSML markup")
+    plain_text: str = Field(..., description="Original text without markup")
+    lexicon_applied: bool = Field(default=False, description="Whether a pronunciation lexicon was applied")
+
+
+class PronunciationEntry(BaseModel):
+    """Single pronunciation lexicon entry."""
+
+    grapheme: str = Field(..., max_length=100, description="Text to replace (how it's written)")
+    phoneme: str | None = Field(None, description="IPA phonetic spelling")
+    alias: str | None = Field(None, description="Replacement text")
+
+
+class PronunciationLexicon(BaseModel):
+    """Pronunciation lexicon for a presentation."""
+
+    lexicon_id: str = Field(..., description="Unique lexicon identifier")
+    presentation_id: str | None = Field(None, description="Associated presentation ID (or null for global)")
+    owner_id: str | None = Field(None, description="Owner/user ID")
+    name: str = Field(..., max_length=100, description="Display name for lexicon")
+    entries: list[PronunciationEntry] = Field(default_factory=list, description="Pronunciation entries")
+    language: str = Field(default="en-US", description="Language code")
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+# Analytics and Telemetry Models
+class JobMetricsRequest(BaseModel):
+    """Request to record job performance metrics."""
+
+    job_id: str = Field(..., description="Unique job identifier")
+    presentation_id: str | None = Field(None, description="Associated presentation ID")
+    total_slides: int = Field(..., ge=1, description="Number of slides processed")
+    total_characters: int = Field(..., ge=0, description="Original text character count")
+    refined_characters: int | None = Field(None, ge=0, description="Characters after refinement")
+    edit_count: int = Field(default=0, ge=0, description="Number of user edits")
+    synthesis_provider: str | None = Field(None, description="TTS provider used")
+    synthesis_duration_ms: float | None = Field(None, ge=0, description="TTS processing time")
+    synthesis_degraded: bool = Field(default=False, description="Whether degraded mode was used")
+    refinement_enabled: bool = Field(default=False, description="Whether AI refinement was used")
+    refinement_duration_ms: float | None = Field(None, ge=0, description="Refinement processing time")
+    refinement_iterations: int = Field(default=0, ge=0, description="Number of refinement attempts")
+    slide_processing_p50: float | None = Field(None, ge=0, description="50th percentile slide processing time")
+    slide_processing_p95: float | None = Field(None, ge=0, description="95th percentile slide processing time")
+    preview_count: int = Field(default=0, ge=0, description="Number of preview requests")
+    voice_changes: int = Field(default=0, ge=0, description="Number of voice setting changes")
+    language_changes: int = Field(default=0, ge=0, description="Number of language changes")
+    export_formats: list[str] = Field(default_factory=list, description="Export formats used")
+    export_count: int = Field(default=0, ge=0, description="Number of exports performed")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+
+
+class JobMetricsResponse(BaseModel):
+    """Response containing recorded job metrics."""
+
+    job_id: str
+    recorded_at: datetime
+    total_duration_ms: float | None = None
+    message: str = "Metrics recorded successfully"
+
+
+class UserFeedbackRequest(BaseModel):
+    """Request to record user feedback and SUS scores."""
+
+    job_id: str | None = Field(None, description="Associated job ID")
+    # SUS questionnaire responses (1-5 scale)
+    sus_q1: int | None = Field(None, ge=1, le=5, description="I think the system is unnecessarily complex")
+    sus_q2: int | None = Field(None, ge=1, le=5, description="I think the system is easy to use")
+    sus_q3: int | None = Field(None, ge=1, le=5, description="I think I need technical support to use this system")
+    sus_q4: int | None = Field(None, ge=1, le=5, description="I think the various functions in this system are well integrated")
+    sus_q5: int | None = Field(None, ge=1, le=5, description="I think there is too much inconsistency in this system")
+    sus_q6: int | None = Field(None, ge=1, le=5, description="I think most people would learn to use this system very quickly")
+    sus_q7: int | None = Field(None, ge=1, le=5, description="I think the system is very cumbersome to use")
+    sus_q8: int | None = Field(None, ge=1, le=5, description="I felt very confident using the system")
+    sus_q9: int | None = Field(None, ge=1, le=5, description="I think I need to learn a lot before I could get going with this system")
+    sus_q10: int | None = Field(None, ge=1, le=5, description="I think the system is unnecessarily complex")
+    feedback_text: str | None = Field(None, max_length=1000, description="Additional user feedback")
+    rating: int | None = Field(None, ge=1, le=5, description="Overall rating (1-5 stars)")
+    issues: list[str] = Field(default_factory=list, description="List of reported issues")
+    suggestions: list[str] = Field(default_factory=list, description="List of suggestions")
+    context: dict[str, Any] = Field(default_factory=dict, description="Additional context")
+
+
+class UserFeedbackResponse(BaseModel):
+    """Response containing recorded feedback and calculated SUS score."""
+
+    feedback_id: int
+    sus_score: float | None = None
+    recorded_at: datetime
+    message: str = "Feedback recorded successfully"
+
+
+class TelemetryExportRequest(BaseModel):
+    """Request to export telemetry data for analysis."""
+
+    format: str = Field(default="json", pattern="^(json|csv)$", description="Export format")
+    start_date: datetime | None = Field(None, description="Filter start date")
+    end_date: datetime | None = Field(None, description="Filter end date")
+    include_user_feedback: bool = Field(default=False, description="Include user feedback data")
+    include_api_usage: bool = Field(default=False, description="Include API usage data")
+    job_ids: list[str] = Field(default_factory=list, description="Specific job IDs to include")
+
+
+class TelemetryExportResponse(BaseModel):
+    """Response containing exported telemetry data."""
+
+    export_url: str
+    file_size: int
+    record_count: int
+    export_format: str
+    created_at: datetime
+    expires_at: datetime
+
+
+class PronunciationLexiconRequest(BaseModel):
+    """Request to create/update pronunciation lexicon."""
+
+    presentation_id: str | None = None
+    owner_id: str | None = None
+    name: str = Field(..., max_length=100)
+    entries: list[PronunciationEntry]
+    language: str = Field(default="en-US")
+
+
 class VoiceProfileRequest(BaseModel):
     name: str = Field(..., max_length=100, description="Display name for the voice profile")
     description: str | None = Field(
@@ -295,6 +465,17 @@ class AudioSegment(BaseModel):
     file_path: str
     duration: float
     volume: float | None = None
+    start_offset: float | None = None
+
+
+class AudioTimelineEntry(BaseModel):
+    slide_id: str
+    start: float
+    end: float
+    duration: float
+    source_path: str
+    volume: float | None = None
+    background_track_path: str | None = None
 
 
 class AudioCombineRequest(BaseModel):
@@ -302,6 +483,13 @@ class AudioCombineRequest(BaseModel):
     presentation_id: str
     segments: list[AudioSegment]
     output_format: str = Field(default="wav", pattern="^(wav|mp3)$")
+    background_track_path: str | None = None
+    background_volume: float = Field(default=-18.0, ge=-60.0, le=0.0)
+    ducking_db: float = Field(default=-6.0, ge=-24.0, le=0.0)
+    normalize: bool = True
+    target_loudness: float = Field(default=-3.0, le=0.0)
+    crossfade_duration_ms: int = Field(default=400, ge=0, le=8000)
+    padding_between_segments: float = Field(default=0.2, ge=0.0, le=5.0)
 
 
 class AudioCombineResponse(BaseModel):
@@ -310,6 +498,10 @@ class AudioCombineResponse(BaseModel):
     total_duration: float
     segment_count: int
     created_at: datetime
+    timeline: list[AudioTimelineEntry] = Field(default_factory=list)
+    peak_dbfs: float | None = None
+    loudness_dbfs: float | None = None
+    background_track_path: str | None = None
 
 
 class AudioTransition(BaseModel):
@@ -323,6 +515,9 @@ class AudioTransitionRequest(BaseModel):
     job_id: str
     combined_audio_path: str
     transitions: list[AudioTransition]
+    output_format: str | None = None
+    normalize: bool = False
+    target_loudness: float = Field(default=-3.0, le=0.0)
 
 
 class AudioTransitionResponse(BaseModel):
@@ -330,6 +525,24 @@ class AudioTransitionResponse(BaseModel):
     output_path: str
     transitions_applied: int
     created_at: datetime
+    updated_at: datetime | None = None
+    output_peak_dbfs: float | None = None
+    output_loudness_dbfs: float | None = None
+
+
+class AudioExportRequest(BaseModel):
+    job_id: str
+    format: str = Field(default="wav", pattern="^(wav|mp3|mp4|pptx|zip)$")
+    include_transitions: bool = True
+
+
+class AudioExportResponse(BaseModel):
+    job_id: str
+    export_path: str
+    format: str
+    file_size: int
+    created_at: datetime
+    download_url: str | None = None
 
 
 class APIResponse(BaseModel):

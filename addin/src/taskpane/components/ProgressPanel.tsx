@@ -1,8 +1,15 @@
 import React from 'react';
 import { Button } from '@ui/button';
 import { Card } from '@ui/card';
+import { Music, Download } from 'lucide-react';
+import { SlideAudioTimelineEntry, SlideAudioExport } from '@components/ScriptEditor';
 
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+export type ConnectionStatus =
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'error';
 
 export interface ProgressSnapshot {
   jobId: string;
@@ -16,15 +23,21 @@ export interface ProgressSnapshot {
   error?: string | null;
   receivedAt: string;
   contextualHighlights?: string[];
+  contextualCallouts?: string[];
   imageReferences?: string[];
   contextualTransitions?: Record<string, string>;
   contextConfidence?: number | null;
+  audioTimeline?: SlideAudioTimelineEntry[];
+  audioExports?: SlideAudioExport[];
+  audioPeakDb?: number | null;
+  audioLoudnessDb?: number | null;
+  audioBackgroundTrack?: string | null;
 }
 
 interface ProgressPanelProps {
   jobIdInput: string;
   onJobIdChange: (value: string) => void;
-  onStartTracking: (jobId?: string) => void;
+  onStartTracking: (jobId?: string, options?: { preserveState?: boolean }) => void;
   onStopTracking: () => void;
   connectionStatus: ConnectionStatus;
   activeJobId: string | null;
@@ -37,6 +50,7 @@ const statusLabelMap: Record<ConnectionStatus, string> = {
   disconnected: 'Disconnected',
   connecting: 'Connecting',
   connected: 'Connected',
+  reconnecting: 'Reconnecting',
   error: 'Error',
 };
 
@@ -44,6 +58,7 @@ const statusDotClassMap: Record<ConnectionStatus, string> = {
   disconnected: 'progress-panel__status-dot--offline',
   connecting: 'progress-panel__status-dot--connecting',
   connected: 'progress-panel__status-dot--online',
+  reconnecting: 'progress-panel__status-dot--connecting',
   error: 'progress-panel__status-dot--error',
 };
 
@@ -112,7 +127,11 @@ export function ProgressPanel({
             <Button
               size="sm"
               onClick={onStartTracking}
-              disabled={!canTrack || connectionStatus === 'connecting'}
+              disabled={
+                !canTrack ||
+                connectionStatus === 'connecting' ||
+                connectionStatus === 'reconnecting'
+              }
             >
               {isConnected && activeJobId ? 'Switch Job' : 'Track Job'}
             </Button>
@@ -189,9 +208,12 @@ export function ProgressPanel({
                 </div>
               )}
               {(latestUpdate.contextualHighlights?.length ||
+                latestUpdate.contextualCallouts?.length ||
                 latestUpdate.imageReferences?.length ||
                 (latestUpdate.contextualTransitions &&
-                  Object.keys(latestUpdate.contextualTransitions).length > 0)) && (
+                  Object.keys(latestUpdate.contextualTransitions).length > 0) ||
+                (latestUpdate.audioTimeline && latestUpdate.audioTimeline.length > 0) ||
+                (latestUpdate.audioExports && latestUpdate.audioExports.length > 0)) && (
                 <div className="progress-panel__context-block">
                   <div className="progress-panel__context-header">
                     <h4>Latest Contextual Insights</h4>
@@ -211,12 +233,91 @@ export function ProgressPanel({
                       </ul>
                     </div>
                   )}
+                  {latestUpdate.contextualCallouts && latestUpdate.contextualCallouts.length > 0 && (
+                    <div className="progress-panel__context-section">
+                      <h5>Narration Callouts</h5>
+                      <ul>
+                        {latestUpdate.contextualCallouts.map((callout, index) => (
+                          <li key={`latest-callout-${index}`}>{callout}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   {latestUpdate.imageReferences && latestUpdate.imageReferences.length > 0 && (
                     <div className="progress-panel__context-section">
                       <h5>Visual References</h5>
                       <ul>
                         {latestUpdate.imageReferences.map((reference, index) => (
                           <li key={`latest-image-ref-${index}`}>{reference}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {latestUpdate.audioTimeline && latestUpdate.audioTimeline.length > 0 && (
+                    <div className="progress-panel__context-section">
+                      <h5>
+                        <Music className="progress-panel__context-icon" /> Audio Timeline
+                      </h5>
+                      <ul>
+                        {latestUpdate.audioTimeline.map((entry, index) => (
+                          <li key={`latest-audio-${entry.slideId}-${index}`}>
+                            <span className="progress-panel__context-label">Start:</span> {entry.start.toFixed(1)}s ·
+                            <span className="progress-panel__context-label"> Duration:</span> {entry.duration.toFixed(1)}s
+                            {Number.isFinite(entry.end) && ` · Ends ${entry.end.toFixed(1)}s`}
+                          </li>
+                        ))}
+                      </ul>
+                      {(Number.isFinite(latestUpdate.audioPeakDb ?? NaN) ||
+                        Number.isFinite(latestUpdate.audioLoudnessDb ?? NaN)) && (
+                        <div className="progress-panel__audio-stats">
+                          {Number.isFinite(latestUpdate.audioPeakDb ?? NaN) && (
+                            <span>Peak {latestUpdate.audioPeakDb?.toFixed(1)} dBFS</span>
+                          )}
+                          {Number.isFinite(latestUpdate.audioLoudnessDb ?? NaN) && (
+                            <span>Loudness {latestUpdate.audioLoudnessDb?.toFixed(1)} dBFS</span>
+                          )}
+                          {latestUpdate.audioBackgroundTrack && (
+                            <span>Bed {latestUpdate.audioBackgroundTrack}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {latestUpdate.audioExports && latestUpdate.audioExports.length > 0 && (
+                    <div className="progress-panel__context-section">
+                      <h5>
+                        <Download className="progress-panel__context-icon" /> Audio Exports
+                      </h5>
+                      <ul>
+                        {latestUpdate.audioExports.map((exportInfo, index) => (
+                          <li key={`latest-export-${exportInfo.format}-${index}`}>
+                            <span className="progress-panel__context-label">{exportInfo.format.toUpperCase()}:</span>{' '}
+                            {exportInfo.resolvedUrl ? (
+                              <a
+                                href={exportInfo.resolvedUrl}
+                                className="progress-panel__link"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {exportInfo.fileSize ? `${(exportInfo.fileSize / 1024 / 1024).toFixed(2)} MB` : 'Download'}
+                              </a>
+                            ) : (
+                              <span>
+                                {exportInfo.fileSize
+                                  ? `${(exportInfo.fileSize / 1024 / 1024).toFixed(2)} MB`
+                                  : 'Ready'}
+                              </span>
+                            )}
+                            {exportInfo.createdAt && (
+                              <>
+                                {' · '}
+                                {new Date(exportInfo.createdAt).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </>
+                            )}
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -275,8 +376,11 @@ export function ProgressPanel({
                     <span>ETA: {formatDuration(event.estimatedTimeRemaining)}</span>
                   </div>
                   {(event.contextualHighlights?.length ||
+                    event.contextualCallouts?.length ||
                     event.imageReferences?.length ||
-                    (event.contextualTransitions && Object.keys(event.contextualTransitions).length > 0)) && (
+                    (event.contextualTransitions && Object.keys(event.contextualTransitions).length > 0) ||
+                    (event.audioTimeline && event.audioTimeline.length > 0) ||
+                    (event.audioExports && event.audioExports.length > 0)) && (
                     <div className="progress-panel__history-context">
                       {typeof event.contextConfidence === 'number' && (
                         <span className="progress-panel__history-confidence">
@@ -294,6 +398,64 @@ export function ProgressPanel({
                         <ul>
                           {event.imageReferences.map((reference, index) => (
                             <li key={`history-image-ref-${event.receivedAt}-${index}`}>{reference}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {event.contextualCallouts && event.contextualCallouts.length > 0 && (
+                        <ul>
+                          {event.contextualCallouts.map((callout, index) => (
+                            <li key={`history-callout-${event.receivedAt}-${index}`}>{callout}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {event.audioTimeline && event.audioTimeline.length > 0 && (
+                        <ul>
+                          {event.audioTimeline.map((entry, index) => (
+                            <li key={`history-audio-${event.receivedAt}-${index}`}>
+                              <Music className="progress-panel__context-icon" />{' '}
+                              <span className="progress-panel__context-label">Start:</span> {entry.start.toFixed(1)}s ·
+                              <span className="progress-panel__context-label"> Duration:</span> {entry.duration.toFixed(1)}s
+                              {Number.isFinite(entry.end) && ` · Ends ${entry.end.toFixed(1)}s`}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {(Number.isFinite(event.audioPeakDb ?? NaN) ||
+                        Number.isFinite(event.audioLoudnessDb ?? NaN)) && (
+                        <div className="progress-panel__audio-stats">
+                          {Number.isFinite(event.audioPeakDb ?? NaN) && (
+                            <span>Peak {event.audioPeakDb?.toFixed(1)} dBFS</span>
+                          )}
+                          {Number.isFinite(event.audioLoudnessDb ?? NaN) && (
+                            <span>Loudness {event.audioLoudnessDb?.toFixed(1)} dBFS</span>
+                          )}
+                          {event.audioBackgroundTrack && <span>Bed {event.audioBackgroundTrack}</span>}
+                        </div>
+                      )}
+                      {event.audioExports && event.audioExports.length > 0 && (
+                        <ul>
+                          {event.audioExports.map((exportInfo, index) => (
+                            <li key={`history-export-${event.receivedAt}-${index}`}>
+                              <Download className="progress-panel__context-icon" />{' '}
+                              <span className="progress-panel__context-label">{exportInfo.format.toUpperCase()}:</span>
+                              {' '}
+                              {exportInfo.resolvedUrl ? (
+                                <a
+                                  href={exportInfo.resolvedUrl}
+                                  className="progress-panel__link"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  {exportInfo.fileSize ? `${(exportInfo.fileSize / 1024 / 1024).toFixed(2)} MB` : 'Download'}
+                                </a>
+                              ) : (
+                                <span>
+                                  {exportInfo.fileSize
+                                    ? `${(exportInfo.fileSize / 1024 / 1024).toFixed(2)} MB`
+                                    : 'Ready'}
+                                </span>
+                              )}
+                            </li>
                           ))}
                         </ul>
                       )}

@@ -53,6 +53,28 @@ class ApplyProfileRequest(BaseModel):
     text: str
 
 
+class PreferredSettingsRequest(BaseModel):
+    """Request to set preferred voice settings for a presentation or owner."""
+
+    owner_id: str | None = None
+    presentation_id: str | None = None
+    provider: str | None = None
+    voice: str | None = None
+    language: str | None = None
+    speed: float | None = None
+    pitch: float | None = None
+    volume: float | None = None
+    tone: str | None = None
+
+
+class AutoApplyRequest(BaseModel):
+    """Request to auto-apply voice profile for a presentation."""
+
+    text: str
+    presentation_id: str
+    owner_id: str | None = None
+
+
 @app.get("/health")
 async def health_check():
     """Health endpoint for voice profile service."""
@@ -131,3 +153,132 @@ async def apply_voice_profile(
         return tts_request
     except VoiceProfileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/preferred-settings")
+async def get_preferred_settings(
+    presentation_id: str | None = None,
+    owner_id: str | None = None,
+    token: str = Depends(oauth2_scheme),
+    profile_manager: VoiceProfileManager = Depends(get_voice_profile_manager),
+) -> dict:
+    """
+    Get preferred voice settings for a presentation and/or owner.
+
+    Uses hierarchical lookup:
+    1. owner:presentation (most specific)
+    2. owner:* (all presentations for owner)
+    3. *:presentation (all owners for presentation)
+    4. *:* (global default)
+    """
+    settings = await profile_manager.get_preferred_settings(owner_id, presentation_id)
+    if settings:
+        return {"settings": settings, "scope": {"owner_id": owner_id, "presentation_id": presentation_id}}
+    return {"settings": None, "scope": {"owner_id": owner_id, "presentation_id": presentation_id}}
+
+
+@app.post("/preferred-settings")
+async def set_preferred_settings(
+    request: PreferredSettingsRequest,
+    token: str = Depends(oauth2_scheme),
+    profile_manager: VoiceProfileManager = Depends(get_voice_profile_manager),
+) -> dict:
+    """
+    Set preferred voice settings for a presentation and/or owner.
+
+    Settings are stored hierarchically and auto-applied during narration generation.
+    """
+    settings = request.model_dump(exclude_unset=True, exclude_none=True, exclude={"owner_id", "presentation_id"})
+
+    if not settings:
+        raise HTTPException(status_code=400, detail="No settings provided")
+
+    await profile_manager.set_preferred_settings(
+        request.owner_id,
+        request.presentation_id,
+        settings,
+    )
+
+    logger.info(
+        "Set preferred settings for owner=%s, presentation=%s: %s",
+        request.owner_id or "*",
+        request.presentation_id or "*",
+        settings.keys(),
+    )
+
+    return {
+        "success": True,
+        "scope": {"owner_id": request.owner_id, "presentation_id": request.presentation_id},
+        "settings": settings,
+    }
+
+
+@app.delete("/preferred-settings")
+async def clear_preferred_settings(
+    presentation_id: str | None = None,
+    owner_id: str | None = None,
+    token: str = Depends(oauth2_scheme),
+    profile_manager: VoiceProfileManager = Depends(get_voice_profile_manager),
+) -> dict:
+    """Clear preferred voice settings for a presentation and/or owner."""
+    await profile_manager.clear_preferred_settings(owner_id, presentation_id)
+    logger.info(
+        "Cleared preferred settings for owner=%s, presentation=%s",
+        owner_id or "*",
+        presentation_id or "*",
+    )
+    return {"success": True, "scope": {"owner_id": owner_id, "presentation_id": presentation_id}}
+
+
+@app.post("/auto-apply", response_model=TTSRequest)
+async def auto_apply_profile(
+    request: AutoApplyRequest,
+    token: str = Depends(oauth2_scheme),
+    profile_manager: VoiceProfileManager = Depends(get_voice_profile_manager),
+) -> TTSRequest:
+    """
+    Auto-apply voice profile based on presentation preferences.
+
+    This endpoint looks up the preferred voice settings for the given
+    presentation_id and owner_id, then generates a TTS request with those settings.
+    If no preferences are found, returns default settings.
+    """
+    # Get preferred settings for this presentation/owner
+    settings = await profile_manager.get_preferred_settings(request.owner_id, request.presentation_id)
+
+    if not settings:
+        # No preferences found, use defaults
+        logger.info(
+            "No preferred settings found for owner=%s, presentation=%s, using defaults",
+            request.owner_id or "*",
+            request.presentation_id,
+        )
+        from shared.models import TTSRequest
+
+        return TTSRequest(
+            text=request.text,
+            voice="en-US-AriaNeural",
+            speed=1.0,
+            pitch=0,
+            volume=1.0,
+            language="en-US",
+        )
+
+    # Apply preferred settings
+    logger.info(
+        "Applying preferred settings for owner=%s, presentation=%s",
+        request.owner_id or "*",
+        request.presentation_id,
+    )
+
+    from shared.models import TTSRequest
+
+    return TTSRequest(
+        text=request.text,
+        voice=settings.get("voice", "en-US-AriaNeural"),
+        speed=settings.get("speed", 1.0),
+        pitch=settings.get("pitch", 0),
+        volume=settings.get("volume", 1.0),
+        language=settings.get("language", "en-US"),
+        driver=settings.get("provider"),
+    )

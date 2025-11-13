@@ -58,6 +58,61 @@ class AzureVisionProvider(ImageAnalysisProvider):
         objects = [obj.get("object") for obj in payload.get("objects", []) if obj.get("object")]
         dominant_colors = payload.get("color", {}).get("dominantColors", [])
 
+        highlights = metadata.get("text_snippets", []).copy()
+        tokens_lower = [str(token).lower() for token in combined_tags + objects]
+        chart_keywords = {"chart", "graph", "diagram", "plot", "visual"}
+        chart_present = any(keyword in token for token in tokens_lower for keyword in chart_keywords)
+        if chart_present:
+            if "chart" not in objects:
+                objects.append("chart")
+            highlights.append("Invite the audience to review the chart while you summarize the message.")
+
+        chart_details: list[str] = []
+        table_insights: list[str] = []
+        data_points: list[str] = list(metadata.get("data_points", []))
+        callouts: list[str] = list(metadata.get("callouts", []))
+
+        for obj in payload.get("objects", []):
+            name = (obj.get("object") or "").lower()
+            rectangle = obj.get("rectangle") or {}
+            region = self._format_region(rectangle)
+            confidence_text = (
+                f" ({obj.get('confidence'):.0%})"
+                if isinstance(obj.get("confidence"), (float, int))
+                else ""
+            )
+            if name in {"chart", "graph", "diagram"}:
+                detail = f"{name.title()} visual{region}{confidence_text}".strip()
+                chart_details.append(detail)
+            elif name in {"table", "grid"}:
+                detail = f"Tabular data{region}{confidence_text}".strip()
+                table_insights.append(detail)
+
+        if caption_text and any(keyword in caption_text.lower() for keyword in ("chart", "graph", "diagram")):
+            chart_details.insert(0, f"{caption_text} (Azure Vision)")
+        if caption_text and "table" in caption_text.lower():
+            table_insights.insert(0, f"{caption_text} (Azure Vision)")
+
+        if not callouts and chart_present:
+            callouts.append(
+                "Narration cue: point the audience to the chart or graph and describe the headline trend."
+            )
+        if not callouts and table_insights:
+            callouts.append(
+                "Narration cue: reference the table briefly and call out the single figure that matters most."
+            )
+        if not callouts:
+            callouts.append(
+                "Narration cue: acknowledge the visual briefly or move on if it does not support the story."
+            )
+
+        include_callouts = service_config.get_pipeline_value(
+            "pipelines.contextual_refinement.include_callouts",
+            True,
+        )
+        if not include_callouts:
+            callouts = []
+
         confidence = caption_confidence if caption_confidence is not None else 0.8
 
         return ImageAnalysis(
@@ -65,7 +120,23 @@ class AzureVisionProvider(ImageAnalysisProvider):
             confidence=min(0.95, max(0.6, confidence)),
             tags=list(dict.fromkeys(combined_tags)),
             objects=objects,
-            text_snippets=metadata.get("text_snippets", []),
+            text_snippets=highlights,
+            chart_insights=chart_details,
+            table_insights=table_insights,
+            data_points=data_points,
+            callouts=callouts,
             dominant_colors=dominant_colors,
             raw_metadata=payload,
         )
+
+    @staticmethod
+    def _format_region(rectangle: dict[str, Any]) -> str:
+        if not rectangle:
+            return ""
+        left = rectangle.get("x")
+        top = rectangle.get("y")
+        width = rectangle.get("w") or rectangle.get("width")
+        height = rectangle.get("h") or rectangle.get("height")
+        if all(isinstance(value, (int, float)) for value in (left, top, width, height)):
+            return f" near ({int(left)}, {int(top)}) {int(width)}x{int(height)}"
+        return ""

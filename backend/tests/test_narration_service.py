@@ -13,6 +13,7 @@ from services.narration.orchestrator import (
     ProgressUpdate,
 )
 from services.narration.app import app
+from services.voice_profiles.manager import VoiceProfileManager
 from shared.models import (
     ExportFormat,
     ExportRequest,
@@ -37,9 +38,52 @@ def client():
 
 
 @pytest.fixture
-def orchestrator():
+def orchestrator(tmp_path):
     """Narration orchestrator instance for testing."""
-    return NarrationOrchestrator()
+    instance = NarrationOrchestrator()
+
+    class StubAudioProcessor:
+        async def combine_segments(self, request):  # type: ignore[no-untyped-def]
+            from shared.models import AudioCombineResponse
+
+            return AudioCombineResponse(
+                job_id=request.job_id,
+                output_path=f"/tmp/{request.job_id}.wav",
+                total_duration=sum(segment.duration for segment in request.segments),
+                segment_count=len(request.segments),
+                created_at=datetime.now(timezone.utc),
+            )
+
+        async def apply_transitions(self, request):  # type: ignore[no-untyped-def]
+            from shared.models import AudioTransitionResponse
+
+            return AudioTransitionResponse(
+                job_id=request.job_id,
+                output_path=request.combined_audio_path,
+                transitions_applied=len(request.transitions),
+                created_at=datetime.now(timezone.utc),
+            )
+
+        def get_job_status(self, job_id):  # type: ignore[no-untyped-def]
+            return {"job_id": job_id}
+
+        async def export_mix(self, request):  # type: ignore[no-untyped-def]
+            from shared.models import AudioExportResponse
+
+            export_path = f"/tmp/{request.job_id}.{request.format}"
+            return AudioExportResponse(
+                job_id=request.job_id,
+                export_path=export_path,
+                format=request.format,
+                file_size=1024,
+                created_at=datetime.now(timezone.utc),
+            )
+
+    instance.audio_processor = StubAudioProcessor()
+    instance.voice_profile_manager = VoiceProfileManager(
+        storage_path=str(tmp_path / "voice_profiles.json")
+    )
+    return instance
 
 
 @pytest.fixture
@@ -133,13 +177,14 @@ class TestNarrationOrchestrator:
                 processing_time=1.5,
             ))
 
-            result = await orchestrator.process_slide("test_job", slide, 1)
+        result = await orchestrator.process_slide("test_job", slide, 1, tts_options={})
 
             assert result["status"] == "completed"
             assert result["slide_id"] == "test_slide"
             assert result["slide_number"] == 1
             assert "refined_content" in result
             assert "audio_result" in result
+            assert "audio_file_path" in result
             assert "subtitles" in result
             assert "processing_time" in result
             assert "contextual_metadata" in result
@@ -164,7 +209,7 @@ class TestNarrationOrchestrator:
         with patch.object(orchestrator, 'ai_refinement_service') as mock_ai:
             mock_ai.refine_text = AsyncMock(side_effect=Exception("AI service failed"))
 
-            result = await orchestrator.process_slide("test_job", slide, 1)
+        result = await orchestrator.process_slide("test_job", slide, 1, tts_options={})
 
             assert result["status"] == "failed"
             assert result["slide_id"] == "test_slide"
@@ -222,7 +267,7 @@ class TestNarrationOrchestrator:
                 )
             )
 
-            result = await orchestrator.process_slide("job-image", slide, 1)
+            result = await orchestrator.process_slide("job-image", slide, 1, tts_options={})
 
             assert result["status"] == "completed"
             assert slide.images[0].analysis is not None
@@ -511,6 +556,179 @@ class TestNarrationAPI:
 
         assert response.status_code == 404
 
+    @pytest.mark.asyncio
+    async def test_contextual_pipeline_disabled_skips_context(self, orchestrator, monkeypatch):
+        from shared.config import config as service_config
+
+        monkeypatch.setattr(
+            service_config,
+            "pipeline_config",
+            {"pipelines": {"contextual_refinement": {"enabled": False}}},
+        )
+
+        slide = SlideContent(slide_id="slide-disabled", content="Content", notes="Notes")
+
+        with patch.object(orchestrator, "ai_refinement_service") as mock_ai, \
+             patch.object(orchestrator, "tts_service") as mock_tts, \
+             patch.object(orchestrator, "image_analysis_service") as mock_image:
+
+            mock_ai.refine_text = AsyncMock(return_value=MagicMock(refined_text="Base text"))
+            mock_ai.refine_with_context = AsyncMock()
+            mock_tts.synthesize_speech = AsyncMock(return_value=TTSResponse(
+                audio_url="/media/audio.wav",
+                duration=3.0,
+                file_size=1000,
+                voice_used="test",
+                request_id="req-1",
+                processing_time=1.0,
+            ))
+            mock_image.analyze_slide_images = AsyncMock()
+
+            result = await orchestrator.process_slide("job-disabled", slide, 1, None, tts_options={})
+
+            mock_ai.refine_with_context.assert_not_awaited()
+            mock_image.analyze_slide_images.assert_not_awaited()
+            assert "contextual_metadata" not in result
+
+    @pytest.mark.asyncio
+    async def test_contextual_pipeline_disables_image_analysis(self, orchestrator, monkeypatch):
+        from shared.config import config as service_config
+
+        monkeypatch.setattr(
+            service_config,
+            "pipeline_config",
+            {"pipelines": {"contextual_refinement": {"enabled": True, "use_image_analysis": False}}},
+        )
+
+        slide = SlideContent(slide_id="slide-no-image", content="Content", notes="Notes")
+
+        with patch.object(orchestrator, "ai_refinement_service") as mock_ai, \
+             patch.object(orchestrator, "tts_service") as mock_tts, \
+             patch.object(orchestrator, "image_analysis_service") as mock_image:
+
+            mock_ai.refine_text = AsyncMock(return_value=MagicMock(refined_text="Base text"))
+            mock_ai.refine_with_context = AsyncMock(return_value=RefinedScript(
+                text="Refined with context",
+                highlights=["Refined with context"],
+                image_references=[],
+                transitions={},
+                confidence=0.7,
+            ))
+            mock_tts.synthesize_speech = AsyncMock(return_value=TTSResponse(
+                audio_url="/media/audio.wav",
+                duration=3.0,
+                file_size=1000,
+                voice_used="test",
+                request_id="req-2",
+                processing_time=1.0,
+            ))
+            mock_image.analyze_slide_images = AsyncMock()
+
+            result = await orchestrator.process_slide("job-no-image", slide, 1, None, tts_options={})
+
+            mock_image.analyze_slide_images.assert_not_awaited()
+            mock_ai.refine_with_context.assert_awaited()
+            assert result.get("contextual_metadata") is not None
+
+    @pytest.mark.asyncio
+    async def test_contextual_refinement_used_when_image_analysis_present(self, orchestrator):
+        slide = SlideContent(
+            slide_id="slide-context",
+            title="Revenue Highlights",
+            content="Revenue grew by 20% this quarter.",
+            images=[
+                ImageData(
+                    image_id="img-1",
+                    description="Revenue chart",
+                    labels=["chart", "revenue"],
+                    analysis=ImageAnalysis(
+                        caption="Line chart showing revenue growth",
+                        confidence=0.9,
+                        tags=["chart"],
+                        objects=["chart"],
+                        callouts=["Narration cue: reference the chart while summarizing the growth."],
+                    ),
+                )
+            ],
+        )
+
+        presentation = PresentationRequest(
+            slides=[slide],
+            metadata={"presentation_id": "deck-42", "keywords": ["revenue", "growth"]},
+        )
+
+        orchestrator.image_analysis_service = MagicMock()
+
+        with patch.object(orchestrator, "ai_refinement_service") as mock_ai, patch.object(
+            orchestrator, "tts_service"
+        ) as mock_tts:
+            mock_ai.refine_text = AsyncMock(
+                return_value=MagicMock(refined_text="Revenue grew by 20% this quarter with strong momentum.")
+            )
+            mock_ai.refine_with_context = AsyncMock(
+                return_value=RefinedScript(
+                    text="Revenue grew by 20% this quarter — invite the audience to review the chart.",
+                    highlights=["Emphasize the 20% growth"],
+                    image_references=["Line chart showing revenue growth"],
+                    transitions={},
+                    confidence=0.82,
+                )
+            )
+            mock_tts.synthesize_speech = AsyncMock(
+                return_value=TTSResponse(
+                    audio_url="/media/test/audio.wav",
+                    duration=4.0,
+                    file_size=512000,
+                    voice_used="en-US-AriaNeural",
+                    processing_time=1.0,
+                )
+            )
+
+            result = await orchestrator.process_slide("job-context", slide, 1, presentation, tts_options={})
+
+            mock_ai.refine_text.assert_awaited_once()
+            mock_ai.refine_with_context.assert_awaited_once()
+            assert result["status"] == "completed"
+            assert result["refined_content"].startswith("Revenue grew by 20%")
+            assert result["contextual_metadata"]["image_references"] == ["Line chart showing revenue growth"]
+
+    @pytest.mark.asyncio
+    async def test_image_analysis_placeholder_applied_when_results_missing(self, orchestrator):
+        class EmptyAnalysisService:
+            async def analyze_slide_images(self, request):  # type: ignore[no-untyped-def]
+                return ImageAnalysisResponse(results=[], processing_time=0.0)
+
+        orchestrator.image_analysis_service = EmptyAnalysisService()
+
+        slide = SlideContent(
+            slide_id="slide-placeholder",
+            title="Product Overview",
+            content="Outline of the product roadmap.",
+            images=[
+                ImageData(
+                    image_id="img-1",
+                    description=None,
+                    alt_text="Product chart",
+                    labels=[],
+                    dominant_colors=["#FFFFFF"],
+                    detected_objects=[],
+                )
+            ],
+        )
+        presentation = PresentationRequest(
+            slides=[slide],
+            metadata={"presentation_id": "deck-1", "keywords": ["roadmap"]},
+        )
+
+        await orchestrator._ensure_image_analysis(slide, presentation)
+        analysis = slide.images[0].analysis
+
+        assert analysis is not None
+        assert analysis.raw_metadata.get("placeholder") is True
+        assert analysis.caption
+        assert "narration cue" in " ".join(analysis.callouts).lower()
+        assert analysis.confidence == pytest.approx(0.05)
+
     def test_cancel_job_success(self, client):
         """Test successful job cancellation."""
         with patch('services.narration.app.orchestrator.cancel_job', new_callable=AsyncMock) as mock_cancel, \
@@ -614,7 +832,7 @@ class TestIntegration:
 
             # Process first slide
             slide_result = await orchestrator.process_slide(
-                job_id, sample_presentation.slides[0], 1
+                job_id, sample_presentation.slides[0], 1, tts_options={}
             )
             assert slide_result["status"] == "completed"
 

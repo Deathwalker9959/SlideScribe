@@ -2,10 +2,10 @@ import json
 import time
 
 from fastapi import HTTPException
-from openai import AsyncOpenAI
 
 from services.ai_refinement.config.config_loader import config as refinement_config
 from services.ai_refinement.contextual_refiner import ContextualRefiner
+from services.ai_refinement.drivers import AzureOpenAIRefinementDriver, OpenAIRefinementDriver
 from shared.models import (
     ContextualRefinementRequest,
     RefinedScript,
@@ -81,6 +81,9 @@ class TextRefinementService:
             f"Loaded {len(refinement_config.get_enabled_steps())} enabled refinement steps"
         )
         self.contextual_refiner = ContextualRefiner(logger)
+
+        # Initialize AI drivers based on configuration
+        self._init_drivers()
 
     async def refine_text(self, request: TextRefinementRequest) -> TextRefinementResponse:
         start_time = time.time()
@@ -167,31 +170,77 @@ class TextRefinementService:
                 refined_text = ai_result.strip()
         return refined_text, changes_made
 
+    def _init_drivers(self):
+        """Initialize AI drivers based on configuration."""
+        # Initialize primary driver
+        primary_config = refinement_config.get_ai_model_config("primary")
+        primary_provider = primary_config.get("provider", "openai")
+
+        self.logger.info(f"Initializing primary AI driver: {primary_provider}")
+        try:
+            if primary_provider == "azure_openai":
+                self.primary_driver = AzureOpenAIRefinementDriver()
+            else:
+                self.primary_driver = OpenAIRefinementDriver()
+        except ValueError as e:
+            self.logger.warning(f"Failed to initialize primary driver: {e}")
+            self.primary_driver = None
+
+        # Initialize fallback driver
+        fallback_config = refinement_config.get_ai_model_config("fallback")
+        if fallback_config:
+            fallback_provider = fallback_config.get("provider", "openai")
+            self.logger.info(f"Initializing fallback AI driver: {fallback_provider}")
+            try:
+                if fallback_provider == "azure_openai":
+                    self.fallback_driver = AzureOpenAIRefinementDriver()
+                else:
+                    self.fallback_driver = OpenAIRefinementDriver()
+            except ValueError as e:
+                self.logger.warning(f"Failed to initialize fallback driver: {e}")
+                self.fallback_driver = None
+        else:
+            self.fallback_driver = None
+
     async def _call_ai_model(
         self, system_prompt: str, user_text: str, temperature: float = 0.3, max_tokens: int = 2000
     ) -> str:
-        try:
-            model_config = refinement_config.get_ai_model_config("primary")
-            api_key = config.get("openai_api_key")
-            if not api_key:
-                self.logger.warning(
-                    "OpenAI API key not configured; returning original text for offline mode"
-                )
-                return user_text
+        """Call AI model using driver pattern with automatic fallback."""
+        if not self.primary_driver:
+            raise ValueError("No AI driver configured")
 
-            client = AsyncOpenAI(api_key=api_key)
-            response = await client.chat.completions.create(
-                model=model_config.get("model", "gpt-4"),
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_text},
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            return response.choices[0].message.content
+        # Prepare step config for driver
+        step_config = {
+            "system_prompt": system_prompt,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+
+        # Add model from config
+        primary_config = refinement_config.get_ai_model_config("primary")
+        step_config["model"] = primary_config.get("model", "gpt-4")
+
+        try:
+            provider = primary_config.get("provider", "openai")
+            self.logger.info(f"Using {provider} provider with model: {step_config['model']}")
+
+            result = await self.primary_driver.refine(user_text, step_config)
+            return result
         except Exception as e:
-            self.logger.error(f"AI model call failed: {e!s}")
+            self.logger.error(f"Primary AI driver failed: {e!s}")
+
+            # Try fallback driver if available
+            if self.fallback_driver:
+                try:
+                    self.logger.info("Attempting fallback AI driver...")
+                    fallback_config = refinement_config.get_ai_model_config("fallback")
+                    step_config["model"] = fallback_config.get("model", "gpt-3.5-turbo")
+
+                    result = await self.fallback_driver.refine(user_text, step_config)
+                    return result
+                except Exception as fallback_error:
+                    self.logger.error(f"Fallback AI driver also failed: {fallback_error!s}")
+
             raise e
 
     def _calculate_improvement_score(self, original: str, refined: str) -> float:

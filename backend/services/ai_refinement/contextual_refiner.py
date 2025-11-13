@@ -11,7 +11,7 @@ from shared.models import (
     PresentationContext,
     RefinedScript,
 )
-from shared.utils import setup_logging
+from shared.utils import setup_logging, config as service_config
 
 
 class ContextualRefiner:
@@ -110,6 +110,23 @@ class ContextualRefiner:
                 reference = f"Image {index}: depicts {', '.join(detail_segments)}"
             else:
                 continue
+            supplemental_notes: list[str] = []
+            include_callouts = service_config.get_pipeline_value(
+                "pipelines.contextual_refinement.include_callouts",
+                True,
+            )
+            if analysis:
+                if analysis.chart_insights:
+                    supplemental_notes.append(f"Chart insight: {analysis.chart_insights[0]}")
+                if analysis.table_insights:
+                    supplemental_notes.append(f"Table insight: {analysis.table_insights[0]}")
+                if analysis.data_points:
+                    supplemental_notes.append(f"Data point: {analysis.data_points[0]}")
+                if include_callouts and analysis.callouts:
+                    supplemental_notes.extend(analysis.callouts[:1])
+
+            if supplemental_notes:
+                reference = f"{reference}. {' '.join(supplemental_notes)}"
 
             references.append(reference)
 

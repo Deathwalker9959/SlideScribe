@@ -33,6 +33,9 @@ async def test_analyze_slide_images_generates_enriched_metadata():
     assert "Revenue Overview" in analysis.caption
     assert "chart" in analysis.tags
     assert analysis.confidence >= 0.75
+    assert analysis.chart_insights
+    assert any("chart" in insight.lower() for insight in analysis.chart_insights)
+    assert analysis.callouts
 
 
 @pytest.mark.asyncio
@@ -134,3 +137,29 @@ async def test_notify_analysis_completed_uses_websocket(monkeypatch):
 async def test_get_job_status_unknown_id_returns_none():
     service = ImageAnalysisService()
     assert service.get_job_status("missing") is None
+
+
+@pytest.mark.asyncio
+async def test_fallback_analysis_populates_data_points():
+    service = ImageAnalysisService()
+    service.provider = AsyncMock()
+    service.provider.analyze.side_effect = RuntimeError("force fallback")  # type: ignore[attr-defined]
+
+    request = ImageAnalysisRequest(
+        presentation_id="pres-fallback",
+        slide_id="slide-fallback",
+        images=[
+            ImageData(
+                image_id="img-fallback",
+                description="Table comparing Q1 2024 revenue 1.2M vs Q1 2025 revenue 1.8M",
+                labels=["table", "comparison"],
+            )
+        ],
+    )
+
+    response = await service.analyze_slide_images(request)
+    analysis = response.results[0].analysis
+
+    assert analysis.table_insights
+    assert analysis.data_points
+    assert any("1.2" in point or "1.8" in point for point in analysis.data_points)

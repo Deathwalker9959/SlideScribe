@@ -39,4 +39,5 @@ class TTSService:
             file_size=int(result.get("file_size", 0)),
             voice_used=result.get("voice_used", request.voice),
             processing_time=float(result.get("processing_time", 0.0)),
+            file_path=result.get("file_path"),
         )

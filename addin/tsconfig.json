@@ -21,7 +21,8 @@
     "paths": {
       "@components/*": ["src/taskpane/components/*"],
       "@ui/*": ["src/taskpane/components/ui/*"],
-      "@styles/*": ["src/taskpane/styles/*"]
+      "@styles/*": ["src/taskpane/styles/*"],
+      "@utils/*": ["src/taskpane/utils/*"]
     }
   },
   "exclude": [

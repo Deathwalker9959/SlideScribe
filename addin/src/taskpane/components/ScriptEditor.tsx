@@ -5,10 +5,29 @@ import { ScrollArea } from '@ui/scroll-area';
 import { Card } from '@ui/card';
 import { Badge } from '@ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/select';
-import { Play, Wand2, Save, Loader2 } from 'lucide-react';
+import { Play, Wand2, Save, Loader2, Music, Download } from 'lucide-react';
 
 const MAX_CHARACTERS = 1200;
 const WORDS_PER_MINUTE = 160;
+
+export interface SlideAudioTimelineEntry {
+  slideId: string;
+  start: number;
+  end: number;
+  duration: number;
+  sourcePath?: string;
+  volume?: number | null;
+  backgroundTrackPath?: string | null;
+}
+
+export interface SlideAudioExport {
+  format: string;
+  path: string;
+  fileSize?: number;
+  createdAt?: string;
+  downloadUrl?: string;
+  resolvedUrl?: string;
+}
 
 export interface SlideScript {
   slideId: string;
@@ -19,21 +38,44 @@ export interface SlideScript {
   wordCount: number;
   updatedAt?: string;
   contextualHighlights?: string[];
+  contextualCallouts?: string[];
   imageReferences?: string[];
   contextualTransitions?: Record<string, string>;
   contextConfidence?: number | null;
   contextualUpdatedAt?: string;
+  imageAttachments?: SlideImageAttachment[];
+  audioTimeline?: SlideAudioTimelineEntry[];
+  audioExports?: SlideAudioExport[];
+  audioMixPath?: string | null;
+  audioPeakDb?: number | null;
+  audioLoudnessDb?: number | null;
+  audioBackgroundTrack?: string | null;
+  audioUrl?: string | null;
+  audioDuration?: number | null;
+}
+
+export interface SlideImageAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  base64: string;
+  size: number;
 }
 
 export type RefinementMode = 'style' | 'clarity' | 'tone';
 
 interface ScriptEditorProps {
   slides: SlideScript[];
+  audioExports?: SlideAudioExport[];
   onUpdateSlide: (slide: SlideScript) => void;
   onPreview: (slide: SlideScript) => Promise<void> | void;
   onRefine: (slide: SlideScript, mode: RefinementMode) => Promise<void> | void;
   previewingSlideId?: string | null;
   refiningSlideId?: string | null;
+  onAddImage?: (slideId: string, file: File) => Promise<void> | void;
+  onRemoveImage?: (slideId: string, attachmentId: string) => void;
+  onEmbedNarration?: () => Promise<void> | void;
+  embeddingNarration?: boolean;
 }
 
 const REFINEMENT_OPTIONS: { label: string; value: RefinementMode }[] = [
@@ -44,11 +86,16 @@ const REFINEMENT_OPTIONS: { label: string; value: RefinementMode }[] = [
 
 export function ScriptEditor({
   slides,
+  audioExports,
   onUpdateSlide,
   onPreview,
   onRefine,
   previewingSlideId,
   refiningSlideId,
+  onAddImage,
+  onRemoveImage,
+  onEmbedNarration,
+  embeddingNarration,
 }: ScriptEditorProps) {
   const [selectedSlideId, setSelectedSlideId] = useState<string | null>(slides[0]?.slideId ?? null);
   const [refinementMode, setRefinementMode] = useState<RefinementMode>('style');
@@ -110,8 +157,22 @@ export function ScriptEditor({
   const isRefining = refiningSlideId === selectedSlide.slideId;
   const hasContextualInsights =
     (selectedSlide.contextualHighlights && selectedSlide.contextualHighlights.length > 0) ||
+    (selectedSlide.contextualCallouts && selectedSlide.contextualCallouts.length > 0) ||
     (selectedSlide.imageReferences && selectedSlide.imageReferences.length > 0) ||
-    (selectedSlide.contextualTransitions && Object.keys(selectedSlide.contextualTransitions).length > 0);
+    (selectedSlide.contextualTransitions && Object.keys(selectedSlide.contextualTransitions).length > 0) ||
+    (selectedSlide.audioTimeline && selectedSlide.audioTimeline.length > 0) ||
+    (selectedSlide.audioExports && selectedSlide.audioExports.length > 0);
+
+  const handleImageSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!selectedSlide || !event.target.files || event.target.files.length === 0) {
+      return;
+    }
+    const file = event.target.files[0];
+    if (onAddImage) {
+      onAddImage(selectedSlide.slideId, file);
+    }
+    event.target.value = '';
+  };
 
   return (
     <div className="script-editor">
@@ -240,12 +301,75 @@ export function ScriptEditor({
                   </ul>
                 </div>
               )}
+              {selectedSlide.contextualCallouts && selectedSlide.contextualCallouts.length > 0 && (
+                <div className="script-editor__context-section">
+                  <h5>Narration Callouts</h5>
+                  <ul className="script-editor__context-list">
+                    {selectedSlide.contextualCallouts.map((callout, index) => (
+                      <li key={`callout-${index}`}>{callout}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {selectedSlide.imageReferences && selectedSlide.imageReferences.length > 0 && (
                 <div className="script-editor__context-section">
                   <h5>Visual References</h5>
                   <ul className="script-editor__context-list">
                     {selectedSlide.imageReferences.map((reference, index) => (
                       <li key={`image-ref-${index}`}>{reference}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {selectedSlide.audioTimeline && selectedSlide.audioTimeline.length > 0 && (
+                <div className="script-editor__context-section script-editor__context-section--audio">
+                  <h5>
+                    <Music className="script-editor__context-icon" />
+                    Audio Timeline
+                  </h5>
+                  <ul className="script-editor__context-list">
+                    {selectedSlide.audioTimeline.map((entry, index) => (
+                      <li key={`audio-timeline-${entry.slideId}-${index}`}>
+                        <span className="script-editor__context-label">Start:</span> {entry.start.toFixed(1)}s ·
+                        <span className="script-editor__context-label"> Duration:</span> {entry.duration.toFixed(1)}s
+                        {Number.isFinite(entry.end) && ` · Ends at ${entry.end.toFixed(1)}s`}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {selectedSlide.audioExports && selectedSlide.audioExports.length > 0 && (
+                <div className="script-editor__context-section script-editor__context-section--audio">
+                  <h5>
+                    <Download className="script-editor__context-icon" />
+                    Available Mixes
+                  </h5>
+                  <ul className="script-editor__context-list">
+                    {selectedSlide.audioExports.map((exportInfo, index) => (
+                      <li key={`audio-export-${exportInfo.format}-${index}`}>
+                        <span className="script-editor__context-label">{exportInfo.format.toUpperCase()}:</span>{' '}
+                        {exportInfo.resolvedUrl ? (
+                          <a
+                            href={exportInfo.resolvedUrl}
+                            className="script-editor__link"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {exportInfo.fileSize ? `${(exportInfo.fileSize / 1024 / 1024).toFixed(2)} MB` : 'Download'}
+                          </a>
+                        ) : (
+                          <span>{exportInfo.fileSize ? `${(exportInfo.fileSize / 1024 / 1024).toFixed(2)} MB` : 'Ready'}</span>
+                        )}
+                        {exportInfo.createdAt && (
+                          <span className="script-editor__context-meta">
+                            {' · '}
+                            {new Date(exportInfo.createdAt).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        )}
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -270,6 +394,104 @@ export function ScriptEditor({
             </div>
           )}
         </Card>
+
+        <Card className="script-editor__images-card">
+          <div className="script-editor__images-header">
+            <h4 className="script-editor__images-title">Slide Images</h4>
+            <p className="script-editor__images-subtitle">
+              Attach slide visuals to improve image analysis results.
+            </p>
+          </div>
+          <div className="script-editor__images-actions">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelection}
+              disabled={!onAddImage}
+            />
+          </div>
+          <div className="script-editor__images-list">
+            {(selectedSlide.imageAttachments ?? []).length === 0 ? (
+              <p className="script-editor__images-empty">No images attached yet.</p>
+            ) : (
+              (selectedSlide.imageAttachments ?? []).map((attachment) => (
+                <div key={attachment.id} className="script-editor__images-item">
+                  <div>
+                    <strong>{attachment.name}</strong>
+                    <span>{Math.round(attachment.size / 1024)} KB</span>
+                  </div>
+                  <div className="script-editor__images-item-actions">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onRemoveImage?.(selectedSlide.slideId, attachment.id)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+
+        {audioExports && audioExports.length > 0 && (
+          <Card className="script-editor__exports-card">
+            <div className="script-editor__images-header">
+              <h4 className="script-editor__images-title">
+                <Download className="script-editor__images-icon" />
+                Job Audio Mixes
+              </h4>
+              <p className="script-editor__images-subtitle">
+                Download combined narration mixes generated for this job.
+              </p>
+            </div>
+            <ul className="script-editor__exports-list">
+              {audioExports.map((exportInfo, index) => (
+                <li key={`job-audio-export-${exportInfo.format}-${index}`}>
+                  <span className="script-editor__exports-format">{exportInfo.format.toUpperCase()}</span>
+                  {exportInfo.resolvedUrl ? (
+                    <a
+                      href={exportInfo.resolvedUrl}
+                      className="script-editor__exports-link"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {exportInfo.fileSize ? `${(exportInfo.fileSize / 1024 / 1024).toFixed(2)} MB` : 'Download'}
+                    </a>
+                  ) : exportInfo.fileSize ? (
+                    <span className="script-editor__exports-size">
+                      {(exportInfo.fileSize / 1024 / 1024).toFixed(2)} MB
+                    </span>
+                  ) : (
+                    <span className="script-editor__exports-size">Pending</span>
+                  )}
+                  {exportInfo.createdAt && (
+                    <span className="script-editor__exports-created">
+                      {new Date(exportInfo.createdAt).toLocaleString()}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {onEmbedNarration && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={onEmbedNarration}
+                disabled={embeddingNarration}
+                className="script-editor__action-btn"
+              >
+                {embeddingNarration ? (
+                  <Loader2 className="script-editor__btn-icon script-editor__btn-icon--spin" />
+                ) : (
+                  <Music className="script-editor__btn-icon" />
+                )}
+                {embeddingNarration ? 'Embedding…' : 'Embed narration in slides'}
+              </Button>
+            )}
+          </Card>
+        )}
 
         <div className="script-editor__footer">
           <div className="script-editor__autosave">

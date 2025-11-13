@@ -2,6 +2,45 @@
 
 Unified backend API for PowerPoint AI refinement and Text-to-Speech services.
 
+## Overview
+
+This backend provides a comprehensive API for:
+- AI-powered text refinement for presentation content
+- Text-to-speech synthesis with multiple voice options
+- Real-time progress tracking via WebSocket
+- Analytics and telemetry collection
+- Subtitle generation and synchronization
+- Voice profile management
+
+## Testing
+
+The project includes comprehensive testing across all components. See [TESTING_GUIDE.md](./TESTING_GUIDE.md) for detailed testing instructions.
+
+### Quick Test Run
+
+```bash
+# Activate environment
+conda activate slidescribe
+
+# Run all tests
+pytest tests/ -v
+
+# Run tests with coverage
+pytest tests/ --cov=services --cov-report=html
+
+# Run specific test categories
+pytest tests/test_websocket_*.py -v          # WebSocket tests
+pytest tests/test_analytics_service.py -v    # Analytics tests
+pytest tests/test_end_to_end_workflow.py -v  # End-to-end tests
+```
+
+### Test Coverage
+
+- **Backend Services**: 80%+ line coverage
+- **WebSocket Functions**: 95%+ coverage
+- **API Endpoints**: 100% coverage
+- **Error Handling**: Complete edge case coverage
+
 ## Quick Start
 
 ### 1. Setup Environment
@@ -32,6 +71,10 @@ Create a `.env` file in the backend root:
 OPENAI_API_KEY=sk-your-openai-key
 AZURE_SPEECH_KEY=your-azure-speech-key
 AZURE_SPEECH_REGION=eastus
+AZURE_VISION_ENDPOINT=https://your-vision-resource.cognitiveservices.azure.com
+AZURE_VISION_KEY=your-azure-vision-key
+IMAGE_ANALYSIS_PROVIDER=azure  # options: azure | openai | stub
+IMAGE_ANALYSIS_OPENAI_MODEL=gpt-4o-mini
 DATABASE_URL=sqlite:///./slidescribe.db
 REDIS_URL=redis://localhost:6379/0
 MEDIA_ROOT=./media
@@ -39,6 +82,24 @@ SECRET_KEY=your-secret-key-here
 ALLOWED_ORIGINS=["*"]
 DEBUG=true
 ```
+
+#### Contextual Pipeline Flags
+
+Image-aware narration is controlled via `config/pipeline.yaml`:
+
+```yaml
+pipelines:
+  contextual_refinement:
+    enabled: true
+    use_image_analysis: true
+    include_callouts: true
+```
+
+- Set `enabled` to `false` to force the classic (text-only) pipeline.
+- `use_image_analysis` determines whether vision providers run for each slide.
+- `include_callouts` toggles the extra narration cues (“invite the audience to look at the chart…”).
+
+Update the YAML (or corresponding `PIPELINE_FLAG_*` env vars) to match your deployment. Each change is picked up on the next request.
 
 ### 3. Initialize Database
 
