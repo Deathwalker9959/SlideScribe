@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '@ui/card';
 import { Button } from '@ui/button';
 import { Textarea } from '@ui/textarea';
@@ -6,7 +6,11 @@ import { Badge } from '@ui/badge';
 import { Separator } from '@ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/select';
 import { Slider } from '@ui/slider';
-import { Play, Pause, RotateCcw, Mic, FileText, Clock, Settings, Volume2, Gauge, Palette } from 'lucide-react';
+import { Play, Pause, RotateCcw, Mic, FileText, Clock, Settings, Volume2, Gauge, Palette, AlertCircle } from 'lucide-react';
+import { apiClient } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import { useWebSocket } from '../contexts/WebSocketContext';
+import { toast } from 'react-toastify';
 
 interface NarrationScript {
   id: string;
@@ -42,9 +46,15 @@ export function NarrationPanel({
   onScriptUpdate,
   onGenerateScript
 }: NarrationPanelProps) {
+  const { user } = useAuth();
+  const { subscribe, unsubscribe, isConnected } = useWebSocket();
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  
   const [isPlaying, setIsPlaying] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showTTSControls, setShowTTSControls] = useState(false);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [generationProgress, setGenerationProgress] = useState(0);
   
   const [ttsSettings, setTTSSettings] = useState<TTSSettings>({
     voice: 'sarah',
@@ -85,19 +95,85 @@ export function NarrationPanel({
   ];
 
   const handleGenerateScript = async () => {
+    if (!user) {
+      toast.error('Please log in to generate scripts');
+      return;
+    }
+
     setIsGenerating(true);
-    // Simulate AI script generation
-    setTimeout(() => {
+    setGenerationProgress(0);
+
+    try {
+      // Subscribe to WebSocket for progress updates
+      const jobId = `script-${Date.now()}`;
+      setCurrentJobId(jobId);
+      
+      if (isConnected) {
+        subscribe(jobId, (data) => {
+          if (data.type === 'progress') {
+            setGenerationProgress(data.progress);
+          }
+        });
+      }
+
+      // Process slide using narration service
+      const slideProcessingRequest = {
+        slide_id: slideId,
+        slide_title: slideTitle,
+        slide_content: slideContent || 'Generate a professional narration script',
+        slide_number: 1, // This would come from slide context in a real implementation
+        presentation_id: 'current-presentation', // This would come from presentation context
+        tone: ttsSettings.tone,
+        audience: 'presentation',
+        language: ttsSettings.language
+      };
+
+      const response = await apiClient.post('/api/v1/narration/process-slide', slideProcessingRequest);
+      
+      if (response.data.result) {
+        let refinedText = '';
+        
+        if (response.data.result.status === 'completed' && response.data.result.refined_script) {
+          refinedText = response.data.result.refined_script;
+        } else {
+          // Fallback to mock script if AI refinement fails
+          refinedText = generateMockScript(slideTitle, slideContent);
+          toast.warning('AI refinement not available, using generated script');
+        }
+        
+        const newScript: NarrationScript = {
+          id: response.data.job_id,
+          slideId,
+          script: refinedText,
+          duration: Math.round(refinedText.split(' ').length * 0.4 / ttsSettings.speed), // Estimate duration
+          generatedAt: new Date()
+        };
+        
+        onScriptUpdate(newScript);
+        toast.success('Narration script generated successfully!');
+      }
+    } catch (error) {
+      console.error('Script generation failed:', error);
+      toast.error('Failed to generate script. Please try again.');
+      
+      // Fallback to mock script
       const newScript: NarrationScript = {
         id: `script-${Date.now()}`,
         slideId,
         script: generateMockScript(slideTitle, slideContent),
-        duration: Math.round(45 / ttsSettings.speed), // Adjust duration based on speed
+        duration: Math.round(45 / ttsSettings.speed),
         generatedAt: new Date()
       };
       onScriptUpdate(newScript);
+    } finally {
       setIsGenerating(false);
-    }, 2000);
+      setGenerationProgress(0);
+      setCurrentJobId(null);
+      
+      if (currentJobId && isConnected) {
+        unsubscribe(currentJobId);
+      }
+    }
   };
 
   const generateMockScript = (title: string, content: string) => {
@@ -131,9 +207,94 @@ export function NarrationPanel({
     }
   };
 
-  const togglePlayback = () => {
-    setIsPlaying(!isPlaying);
-    // In a real app, this would control text-to-speech with current settings
+  const togglePlayback = async () => {
+    if (!script || !user) {
+      toast.error('No script available or not logged in');
+      return;
+    }
+
+    if (isPlaying) {
+      // Pause playback
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      setIsPlaying(false);
+      return;
+    }
+
+    try {
+      // Generate TTS audio for the script
+      const ttsRequest = {
+        text: script.script,
+        voice_profile: {
+          voice: ttsSettings.voice,
+          speed: ttsSettings.speed,
+          pitch: ttsSettings.pitch,
+          volume: ttsSettings.volume,
+          language: ttsSettings.language,
+          tone: ttsSettings.tone
+        }
+      };
+
+      const response = await apiClient.post('/api/v1/tts/synthesize', ttsRequest);
+      
+      if (response.data.success && response.data.data) {
+        const audioUrl = response.data.data.audio_url;
+        
+        // Create audio element and play
+        if (audioRef.current) {
+          audioRef.current.src = audioUrl;
+          audioRef.current.play();
+          setIsPlaying(true);
+          
+          audioRef.current.onended = () => {
+            setIsPlaying(false);
+          };
+          
+          audioRef.current.onerror = () => {
+            setIsPlaying(false);
+            toast.error('Audio playback failed');
+          };
+        } else {
+          // Create new audio element
+          const audio = new Audio(audioUrl);
+          audioRef.current = audio;
+          audio.play();
+          setIsPlaying(true);
+          
+          audio.onended = () => {
+            setIsPlaying(false);
+          };
+          
+          audio.onerror = () => {
+            setIsPlaying(false);
+            toast.error('Audio playback failed');
+          };
+        }
+      }
+    } catch (error) {
+      console.error('TTS generation failed:', error);
+      toast.error('Failed to generate audio. Please try again.');
+      
+      // Fallback: use browser's speech synthesis
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(script.script);
+        utterance.rate = ttsSettings.speed;
+        utterance.pitch = ttsSettings.pitch;
+        utterance.volume = ttsSettings.volume;
+        
+        utterance.onstart = () => setIsPlaying(true);
+        utterance.onend = () => setIsPlaying(false);
+        utterance.onerror = () => {
+          setIsPlaying(false);
+          toast.error('Speech synthesis failed');
+        };
+        
+        window.speechSynthesis.speak(utterance);
+      } else {
+        toast.error('Text-to-speech not available in this browser');
+      }
+    }
   };
 
   const formatDuration = (seconds: number) => {
@@ -386,23 +547,34 @@ export function NarrationPanel({
             <p className="text-sm text-muted-foreground mb-4 max-w-xs">
               Generate an AI-powered narration script based on your slide content
             </p>
-            <Button
-              onClick={handleGenerateScript}
-              disabled={isGenerating}
-              className="flex items-center gap-2"
-            >
-              {isGenerating ? (
-                <>
-                  <RotateCcw className="w-4 h-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <FileText className="w-4 h-4" />
-                  Generate Script
-                </>
+            <div className="space-y-3">
+              <Button
+                onClick={handleGenerateScript}
+                disabled={isGenerating}
+                className="flex items-center gap-2 w-full"
+              >
+                {isGenerating ? (
+                  <>
+                    <RotateCcw className="w-4 h-4 animate-spin" />
+                    Generating... {generationProgress > 0 && `${generationProgress}%`}
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-4 h-4" />
+                    Generate Script
+                  </>
+                )}
+              </Button>
+              
+              {isGenerating && generationProgress > 0 && (
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${generationProgress}%` }}
+                  />
+                </div>
               )}
-            </Button>
+            </div>
           </div>
         )}
       </div>

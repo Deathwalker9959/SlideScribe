@@ -2145,11 +2145,21 @@ export function NarrationAssistant() {
           {currentView === 'debug' && <DebugPanel />}
           {currentView === 'export' && (
             <ExportPanel
-              slideScripts={slideScripts}
-              voiceSettings={voiceSettings}
-              jobAudioExports={jobAudioExports}
-              onEmbedNarration={handleEmbedNarration}
-              fetchJobAudioExports={fetchJobAudioExports}
+              jobId={activeJobId}
+              job={latestProgress ? {
+                id: activeJobId,
+                status: latestProgress.status,
+                progress: latestProgress.progress,
+                currentSlide: latestProgress.currentSlide,
+                totalSlides: latestProgress.totalSlides,
+                message: latestProgress.message,
+                error: latestProgress.error,
+                createdAt: latestProgress.receivedAt
+              } : null}
+              onEmbedComplete={() => {
+                setStatusMessage('Audio successfully embedded in PowerPoint!');
+                setCurrentView('progress');
+              }}
             />
           )}
         </div>

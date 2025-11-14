@@ -110,14 +110,14 @@ content_type_pipelines:
 # AI Model Configuration
 ai_models:
   primary:
-    provider: "openai"
-    model: "gpt-4"
-    api_version: "2023-12-01-preview"
-    
+    provider: "azure_openai"
+    model: "gpt-4o-mini"
+    api_version: "2024-07-18"
+
   fallback:
     provider: "azure_openai"
-    model: "gpt-35-turbo"
-    api_version: "2023-12-01-preview"
+    model: "gpt-4o-mini"
+    api_version: "2024-07-18"
 
 # Quality thresholds
 quality_metrics:

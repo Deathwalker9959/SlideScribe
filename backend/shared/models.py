@@ -26,7 +26,42 @@ class ExportFormat(str, Enum):
     AUDIO_WAV = "wav"
 
 
+class JobStatus(str, Enum):
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    REFINING = "refining"
+    SYNTHESIZING = "synthesizing"
+    COMBINING = "combining"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
 # Request/Response Models
+class NarrationRequest(BaseModel):
+    presentation_id: str
+    slides: list["SlideContent"]
+    voice_config: dict[str, Any] = Field(default_factory=dict)
+    refinement_enabled: bool = True
+    export_format: ExportFormat = ExportFormat.AUDIO_MP3
+    language: str = "en-US"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class NarrationResponse(BaseModel):
+    job_id: str
+    status: JobStatus
+    presentation_id: str
+    total_slides: int
+    processed_slides: int = 0
+    audio_urls: list[str] = Field(default_factory=list)
+    export_url: str | None = None
+    estimated_completion: datetime | None = None
+    error_message: str | None = None
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
 class TextRefinementRequest(BaseModel):
     text: str = Field(..., max_length=10000, description="Text to refine")
     refinement_type: TextRefinementType = Field(default=TextRefinementType.GRAMMAR)

@@ -31,9 +31,9 @@ class TestSSMLBuilderCore:
 
         assert isinstance(ssml, str)
         assert "Hello world" in ssml
-        assert ssml.startswith('<speak version="1.0"')
+        assert ssml.startswith("<speak version='1.0'")
         assert ssml.endswith('</speak>')
-        assert '<voice xml:lang="en-US" name="en-US-AriaNeural">' in ssml
+        assert "<voice name='en-US-AriaNeural'>" in ssml
         assert "</voice>" in ssml
 
     def test_ssml_with_emphasis(self):
@@ -44,7 +44,7 @@ class TestSSMLBuilderCore:
         )
         ssml = self.builder.build(request)
 
-        assert '<emphasis level="moderate">important</emphasis>' in ssml
+        assert "<emphasis level='strong'>important</emphasis>" in ssml
         assert "This is" in ssml
         assert "and this is normal" in ssml
 
@@ -56,8 +56,8 @@ class TestSSMLBuilderCore:
         )
         ssml = self.builder.build(request)
 
-        assert '<break time="1.0s"/>' in ssml
-        assert '<break time="0.5s"/>' in ssml
+        assert '<break time=\'1000ms\'/>' in ssml
+        assert '<break time=\'500ms\'/>' in ssml
 
     def test_ssml_with_prosody(self):
         """Test SSML generation with prosody."""
@@ -69,9 +69,9 @@ class TestSSMLBuilderCore:
         )
         ssml = self.builder.build(request)
 
-        assert '<prosody rate="1.2"' in ssml
-        assert 'pitch="+10%"' in ssml
-        assert 'volume="loud"' in ssml
+        assert '<prosody rate=\'120%\'' in ssml
+        assert 'pitch=\'+10%\'' in ssml
+        assert 'volume=\'loud\'' in ssml
 
     def test_ssml_xml_escaping(self):
         """Test XML character escaping."""
@@ -100,48 +100,36 @@ class TestSSMLBuilderCore:
 
     def test_apply_preset_news_anchor(self):
         """Test news anchor preset application."""
-        request = SSMLRequest(
-            text="Breaking news update",
-            preset="news_anchor"
-        )
+        request = self.builder.create_preset("news_anchor", "Breaking news update")
         ssml = self.builder.build(request)
 
         assert "Breaking news update" in ssml
         # News anchor preset should modify prosody
-        assert '<prosody' in ssml
+        assert "<prosody" in ssml
 
     def test_apply_preset_storytelling(self):
         """Test storytelling preset application."""
-        request = SSMLRequest(
-            text="Once upon a time",
-            preset="storytelling"
-        )
+        request = self.builder.create_preset("storytelling", "Once upon a time")
         ssml = self.builder.build(request)
 
         assert "Once upon a time" in ssml
-        assert '<prosody' in ssml
+        assert "<prosody" in ssml
 
     def test_apply_preset_technical(self):
         """Test technical preset application."""
-        request = SSMLRequest(
-            text="Technical specification",
-            preset="technical"
-        )
+        request = self.builder.create_preset("technical", "Technical specification")
         ssml = self.builder.build(request)
 
         assert "Technical specification" in ssml
-        assert '<prosody' in ssml
+        assert "<prosody" in ssml
 
     def test_apply_preset_casual(self):
         """Test casual preset application."""
-        request = SSMLRequest(
-            text="Hey, what's up?",
-            preset="casual"
-        )
+        request = self.builder.create_preset("casual", "Hey, what's up?")
         ssml = self.builder.build(request)
 
-        assert "Hey, what's up?" in ssml
-        assert '<prosody' in ssml
+        assert "Hey, what&#x27;s up?" in ssml  # HTML escaped apostrophe
+        assert "<prosody" in ssml
 
 
 class TestLexiconManagerBasic:

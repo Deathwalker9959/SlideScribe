@@ -9,7 +9,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from services.ai_refinement import app as ai_refinement_module
-from services.analytics import app as analytics_module
+from services.analytics.app import app as analytics_app
 from services.audio_processing.app import app as audio_processing_app
 from services.auth import router as auth_router
 from services.image_analysis import app as image_analysis_module
@@ -25,7 +25,7 @@ logger = setup_logging("slidescribe-backend")
 
 # Get routers from the service apps
 ai_refinement_app = ai_refinement_module.app
-analytics_app = analytics_module.app
+analytics_app = analytics_app
 narration_app = narration_module.app
 subtitles_app = subtitles_module.app
 tts_app = tts_module.app

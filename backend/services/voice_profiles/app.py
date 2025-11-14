@@ -3,8 +3,10 @@
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Any
 
 from services.auth import oauth2_scheme
+from services.voice_profiles.auto_apply import VoiceProfileAutoApply
 from services.voice_profiles.manager import (
     VoiceProfileManager,
     VoiceProfileNotFoundError,
@@ -29,11 +31,17 @@ app.add_middleware(
 )
 
 manager = VoiceProfileManager()
+auto_apply = VoiceProfileAutoApply(manager)
 app.state.voice_profile_manager = manager
+app.state.voice_profile_auto_apply = auto_apply
 
 
 def get_voice_profile_manager() -> VoiceProfileManager:
     return app.state.voice_profile_manager
+
+
+def get_voice_profile_auto_apply() -> VoiceProfileAutoApply:
+    return app.state.voice_profile_auto_apply
 
 
 class VoiceProfileUpdateRequest(BaseModel):
@@ -73,6 +81,37 @@ class AutoApplyRequest(BaseModel):
     text: str
     presentation_id: str
     owner_id: str | None = None
+    language: str = "en-US"
+    fallback_settings: dict[str, Any] | None = None
+
+
+class EnhancedAutoApplyRequest(BaseModel):
+    """Enhanced auto-apply request with tone/style preferences."""
+
+    text: str
+    presentation_id: str
+    owner_id: str | None = None
+    language: str = "en-US"
+    tone: str | None = None
+    style: str | None = None
+    fallback_settings: dict[str, Any] | None = None
+
+
+class CreateProfileFromSettingsRequest(BaseModel):
+    """Request to create a voice profile from settings."""
+
+    name: str
+    settings: dict[str, Any]
+    description: str | None = None
+    tags: list[str] | None = None
+
+
+class RecommendedProfileRequest(BaseModel):
+    """Request to get a recommended voice profile."""
+
+    language: str = "en-US"
+    tone: str | None = None
+    style: str | None = None
 
 
 @app.get("/health")
@@ -234,51 +273,146 @@ async def clear_preferred_settings(
 async def auto_apply_profile(
     request: AutoApplyRequest,
     token: str = Depends(oauth2_scheme),
-    profile_manager: VoiceProfileManager = Depends(get_voice_profile_manager),
+    auto_apply_service: VoiceProfileAutoApply = Depends(get_voice_profile_auto_apply),
 ) -> TTSRequest:
     """
     Auto-apply voice profile based on presentation preferences.
 
-    This endpoint looks up the preferred voice settings for the given
-    presentation_id and owner_id, then generates a TTS request with those settings.
-    If no preferences are found, returns default settings.
+    This endpoint uses the enhanced auto-apply service to intelligently
+    select and apply the most appropriate voice profile for the context.
     """
-    # Get preferred settings for this presentation/owner
-    settings = await profile_manager.get_preferred_settings(request.owner_id, request.presentation_id)
+    return await auto_apply_service.apply_profile_for_context(
+        text=request.text,
+        language=request.language,
+        owner_id=request.owner_id,
+        presentation_id=request.presentation_id,
+        fallback_settings=request.fallback_settings
+    )
+
+
+@app.post("/auto-apply/enhanced", response_model=TTSRequest)
+async def enhanced_auto_apply_profile(
+    request: EnhancedAutoApplyRequest,
+    token: str = Depends(oauth2_scheme),
+    auto_apply_service: VoiceProfileAutoApply = Depends(get_voice_profile_auto_apply),
+) -> TTSRequest:
+    """
+    Enhanced auto-apply with tone/style preferences.
+
+    This endpoint considers tone and style preferences when selecting
+    the most appropriate voice profile for the context.
+    """
+    # First try to get a recommended profile based on tone/style
+    recommended_profile = await auto_apply_service.get_recommended_profile(
+        language=request.language,
+        tone=request.tone,
+        style=request.style
+    )
+
+    if recommended_profile:
+        logger.info(f"Using recommended profile: {recommended_profile.name}")
+        return await auto_apply_service.profile_manager.apply_profile(request.text, recommended_profile)
+
+    # Fallback to standard auto-apply
+    return await auto_apply_service.apply_profile_for_context(
+        text=request.text,
+        language=request.language,
+        owner_id=request.owner_id,
+        presentation_id=request.presentation_id,
+        fallback_settings=request.fallback_settings
+    )
+
+
+@app.post("/create-from-settings", response_model=VoiceProfile)
+async def create_profile_from_settings(
+    request: CreateProfileFromSettingsRequest,
+    token: str = Depends(oauth2_scheme),
+    auto_apply_service: VoiceProfileAutoApply = Depends(get_voice_profile_auto_apply),
+) -> VoiceProfile:
+    """
+    Create a voice profile from settings dictionary.
+
+    This endpoint allows creating profiles from existing settings,
+    useful for saving frequently used configurations.
+    """
+    try:
+        profile = await auto_apply_service.create_profile_from_settings(
+            name=request.name,
+            settings=request.settings,
+            description=request.description,
+            tags=request.tags
+        )
+        return profile
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/recommended-profile", response_model=VoiceProfile | None)
+async def get_recommended_profile(
+    request: RecommendedProfileRequest,
+    token: str = Depends(oauth2_scheme),
+    auto_apply_service: VoiceProfileAutoApply = Depends(get_voice_profile_auto_apply),
+) -> VoiceProfile | None:
+    """
+    Get a recommended voice profile based on language and optional tone/style.
+
+    This endpoint analyzes existing profiles and returns the most suitable
+    one for the given criteria.
+    """
+    return await auto_apply_service.get_recommended_profile(
+        language=request.language,
+        tone=request.tone,
+        style=request.style
+    )
+
+
+@app.post("/save-preferred-settings")
+async def save_preferred_settings_endpoint(
+    request: PreferredSettingsRequest,
+    token: str = Depends(oauth2_scheme),
+    auto_apply_service: VoiceProfileAutoApply = Depends(get_voice_profile_auto_apply),
+) -> dict:
+    """
+    Save preferred voice settings for future auto-application.
+
+    This endpoint uses the auto-apply service to persist settings
+    that will be automatically applied in future requests.
+    """
+    settings = request.model_dump(exclude_unset=True, exclude_none=True, exclude={"owner_id", "presentation_id"})
 
     if not settings:
-        # No preferences found, use defaults
-        logger.info(
-            "No preferred settings found for owner=%s, presentation=%s, using defaults",
-            request.owner_id or "*",
-            request.presentation_id,
-        )
-        from shared.models import TTSRequest
+        raise HTTPException(status_code=400, detail="No settings provided")
 
-        return TTSRequest(
-            text=request.text,
-            voice="en-US-AriaNeural",
-            speed=1.0,
-            pitch=0,
-            volume=1.0,
-            language="en-US",
-        )
+    await auto_apply_service.save_preferred_settings(
+        owner_id=request.owner_id,
+        presentation_id=request.presentation_id,
+        settings=settings
+    )
 
-    # Apply preferred settings
     logger.info(
-        "Applying preferred settings for owner=%s, presentation=%s",
+        "Saved preferred settings for owner=%s, presentation=%s: %s",
         request.owner_id or "*",
-        request.presentation_id,
+        request.presentation_id or "*",
+        settings.keys(),
     )
 
-    from shared.models import TTSRequest
+    return {
+        "success": True,
+        "scope": {"owner_id": request.owner_id, "presentation_id": request.presentation_id},
+        "settings": settings,
+    }
 
-    return TTSRequest(
-        text=request.text,
-        voice=settings.get("voice", "en-US-AriaNeural"),
-        speed=settings.get("speed", 1.0),
-        pitch=settings.get("pitch", 0),
-        volume=settings.get("volume", 1.0),
-        language=settings.get("language", "en-US"),
-        driver=settings.get("provider"),
-    )
+
+@app.get("/default-profile/{language}", response_model=VoiceProfile)
+async def get_default_profile(
+    language: str,
+    token: str = Depends(oauth2_scheme),
+    auto_apply_service: VoiceProfileAutoApply = Depends(get_voice_profile_auto_apply),
+) -> VoiceProfile:
+    """
+    Get or create the default voice profile for a language.
+
+    This endpoint ensures a default profile exists for the given language,
+    creating one if necessary.
+    """
+    return await auto_apply_service.get_or_create_default_profile(language)

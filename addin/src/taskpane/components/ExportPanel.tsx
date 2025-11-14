@@ -1,420 +1,311 @@
-/* global PowerPoint */
+import React, { useState, useEffect } from 'react';
+import { Download, Play, FileAudio, FileVideo, FileText, Save, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { NarrationJob } from '../../state/types';
 
-import React, { useState, useCallback, useEffect } from 'react';
-import { Button } from '@ui/button';
-import {
-  Download,
-  Play,
-  Settings,
-  Volume2,
-  FileAudio,
-  FileVideo,
-  RefreshCw,
-  CheckCircle,
-  AlertCircle,
-  Info,
-  Loader2,
-  X,
-} from 'lucide-react';
-
-type SlideScript = {
-  slideId: string;
-  slideIndex: number;
-  title: string;
-  speakerNotes: string;
-  extractedText: string;
-  combinedText: string;
-  generatedScript?: string;
-  narrationAudioUrl?: string;
-  narrationDuration?: number;
-  wordsPerMinute?: number;
-  audioJobId?: string;
-  subtitles?: Array<{
-    start: number;
-    end: number;
-    text: string;
-  }>;
-};
-
-type VoiceSettingsValue = {
-  voice: string;
-  speed: number;
-  pitch: number;
-  language: string;
-  model?: string;
-  provider?: string;
-};
-
-type AudioExport = {
-  format: string;
-  path?: string;
-  downloadUrl?: string;
-  fileSize?: number;
-  duration?: number;
-  createdAt: string;
-};
-
-type ExportPanelProps = {
-  slideScripts: SlideScript[];
-  voiceSettings: VoiceSettingsValue;
-  jobAudioExports: AudioExport[];
-  onEmbedNarration: () => Promise<void>;
-  fetchJobAudioExports: (jobId: string) => Promise<void>;
-};
-
-declare global {
-  interface Window {
-    __SLIDESCRIBE_BACKEND_URL__?: string;
-  }
+interface ExportPanelProps {
+  jobId: string | null;
+  job: NarrationJob | null;
+  onEmbedComplete?: () => void;
 }
 
-const buildBackendHttpUrl = (path: string): string => {
-  if (typeof window !== 'undefined' && window.__SLIDESCRIBE_BACKEND_URL__) {
-    const baseUrl = window.__SLIDESCRIBE_BACKEND_URL__.replace(/\/$/, '');
-    return `${baseUrl}${path}`;
-  }
-  return `http://localhost:8000${path}`;
-};
+interface ExportStatus {
+  format: string;
+  url: string;
+  size: number;
+  status: 'ready' | 'processing' | 'error';
+  message?: string;
+}
 
-const resolveDownloadUrl = (url: string | undefined): string | undefined => {
-  if (!url) return undefined;
-  if (typeof window === 'undefined') return url;
+export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedComplete }) => {
+  const [exports, setExports] = useState<ExportStatus[]>([]);
+  const [isEmbedding, setIsEmbedding] = useState(false);
+  const [embedStatus, setEmbedStatus] = useState<'idle' | 'embedding' | 'success' | 'error'>('idle');
+  const [embedMessage, setEmbedMessage] = useState('');
 
-  try {
-    const candidate = new URL(url, window.location.origin);
-    if (!candidate.protocol.startsWith('http')) {
-      return undefined;
-    }
-    return candidate.href;
-  } catch {
-    return undefined;
-  }
-};
-
-export const ExportPanel: React.FC<ExportPanelProps> = ({
-  slideScripts,
-  voiceSettings,
-  jobAudioExports,
-  onEmbedNarration,
-  fetchJobAudioExports,
-}) => {
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportStatus, setExportStatus] = useState<{
-    type: 'idle' | 'exporting' | 'success' | 'error';
-    message: string;
-  }>({ type: 'idle', message: '' });
-  const [selectedExportFormat, setSelectedExportFormat] = useState<'mp4' | 'pptx'>('mp4');
-  const [includeSubtitles, setIncludeSubtitles] = useState(true);
-  const [activeJobId, setActiveJobId] = useState<string>('');
-  const [audioExports, setAudioExports] = useState<AudioExport[]>([]);
-
-  // Initialize audio exports from props
+  // Load available exports when job is complete
   useEffect(() => {
-    setAudioExports(jobAudioExports);
-  }, [jobAudioExports]);
-
-  // Find active job ID from slide scripts
-  useEffect(() => {
-    const scriptWithJob = slideScripts.find(script => script.audioJobId);
-    if (scriptWithJob?.audioJobId) {
-      setActiveJobId(scriptWithJob.audioJobId);
-      fetchJobAudioExports(scriptWithJob.audioJobId);
+    if (jobId && job?.status === 'completed') {
+      loadExports();
     }
-  }, [slideScripts, fetchJobAudioExports]);
+  }, [jobId, job?.status]);
 
-  const handleExport = useCallback(async () => {
-    if (!activeJobId) {
-      setExportStatus({
-        type: 'error',
-        message: 'No narration job found. Please generate narration first.',
-      });
-      return;
-    }
-
-    setIsExporting(true);
-    setExportStatus({ type: 'exporting', message: 'Starting export...' });
+  const loadExports = async () => {
+    if (!jobId) return;
 
     try {
-      const requestUrl = buildBackendHttpUrl('/api/v1/narration/export');
-      const response = await fetch(requestUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          jobId: activeJobId,
-          exportFormat: selectedExportFormat,
-          includeSubtitles,
-          voiceSettings,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Export failed: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-
-      setExportStatus({
-        type: 'success',
-        message: `Export completed successfully! ${result.fileSize ? `File size: ${(result.fileSize / 1024 / 1024).toFixed(2)} MB` : ''}`,
-      });
-
-      // Refresh audio exports if there are new ones
-      if (result.downloadUrl) {
-        await fetchJobAudioExports(activeJobId);
+      const response = await fetch(`http://localhost:8000/api/v1/audio/exports/${jobId}`);
+      if (response.ok) {
+        const exportData = await response.json();
+        setExports(exportData.exports || []);
       }
     } catch (error) {
-      setExportStatus({
-        type: 'error',
-        message: error instanceof Error ? error.message : 'Export failed',
-      });
-    } finally {
-      setIsExporting(false);
+      console.error('Failed to load exports:', error);
     }
-  }, [activeJobId, selectedExportFormat, includeSubtitles, voiceSettings, fetchJobAudioExports]);
+  };
 
-  const handleEmbedNarration = useCallback(async () => {
-    setIsExporting(true);
-    setExportStatus({ type: 'exporting', message: 'Embedding narration...' });
-
-    try {
-      await onEmbedNarration();
-      setExportStatus({
-        type: 'success',
-        message: 'Narration embedded successfully!',
-      });
-    } catch (error) {
-      setExportStatus({
-        type: 'error',
-        message: error instanceof Error ? error.message : 'Embedding failed',
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  }, [onEmbedNarration]);
-
-  const handleDownload = useCallback(async (exportInfo: AudioExport) => {
-    const url = resolveDownloadUrl(exportInfo.downloadUrl || exportInfo.path);
-    if (!url) return;
-
+  const downloadFile = async (format: string, url: string) => {
     try {
       const response = await fetch(url);
-      if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
-
+      if (!response.ok) throw new Error('Download failed');
+      
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `narration.${exportInfo.format}`;
+      
+      // Set filename based on format
+      const extension = format.toLowerCase();
+      a.download = `narration_${jobId}.${extension}`;
+      
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(downloadUrl);
     } catch (error) {
-      console.error('Download failed:', error);
+      console.error(`Failed to download ${format}:`, error);
     }
-  }, []);
+  };
 
-  const hasNarration = slideScripts.some(script => script.narrationAudioUrl);
-  const totalDuration = slideScripts.reduce((sum, script) => sum + (script.narrationDuration || 0), 0);
+  const embedAudioInPowerPoint = async () => {
+    if (!jobId || !Office) return;
+
+    setIsEmbedding(true);
+    setEmbedStatus('embedding');
+    setEmbedMessage('Embedding audio into PowerPoint...');
+
+    try {
+      // Get the audio export URL
+      const audioExport = exports.find(exp => exp.format.toLowerCase() === 'mp3');
+      if (!audioExport) {
+        throw new Error('No audio export available');
+      }
+
+      // Download audio data
+      const audioResponse = await fetch(audioExport.url);
+      const audioBlob = await audioResponse.blob();
+      const audioBase64 = await blobToBase64(audioBlob);
+
+      // Get current slide
+      await PowerPoint.run(async (context) => {
+        const slide = context.presentation.getSelectedSlides().getFirst();
+        slide.load("id");
+        await context.sync();
+
+        // Create audio file name
+        const audioFileName = `narration_${jobId}.mp3`;
+
+        // Add audio to slide
+        const audio = slide.shapes.addMediaObject(audioBase64, PowerPoint.MediaInsertType.audio, 
+          100, 100, 100, 100); // Position and size (will be adjusted)
+
+        // Configure audio properties
+        audio.media.playAutomatically = true;
+        audio.media.hideWhilePlaying = true;
+        
+        // Position audio off-slide (invisible but functional)
+        audio.left = context.presentation.slideWidth + 100;
+        audio.top = context.presentation.slideHeight + 100;
+
+        await context.sync();
+      });
+
+      setEmbedStatus('success');
+      setEmbedMessage('Audio successfully embedded in PowerPoint!');
+      
+      // Notify parent component
+      if (onEmbedComplete) {
+        onEmbedComplete();
+      }
+
+    } catch (error) {
+      console.error('Failed to embed audio:', error);
+      setEmbedStatus('error');
+      setEmbedMessage(`Failed to embed audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsEmbedding(false);
+    }
+  };
+
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove data URL prefix to get pure base64
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const getFormatIcon = (format: string) => {
+    switch (format.toLowerCase()) {
+      case 'mp3':
+      case 'wav':
+        return <FileAudio className="w-4 h-4" />;
+      case 'mp4':
+        return <FileVideo className="w-4 h-4" />;
+      case 'vtt':
+      case 'srt':
+        return <FileText className="w-4 h-4" />;
+      default:
+        return <Download className="w-4 h-4" />;
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'ready':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'processing':
+        return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />;
+      case 'error':
+        return <AlertCircle className="w-4 h-4 text-red-500" />;
+      default:
+        return null;
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  if (!job) {
+    return (
+      <div className="p-6 text-center text-gray-500">
+        <FileAudio className="w-12 h-12 mx-auto mb-4 opacity-50" />
+        <p>No job selected</p>
+      </div>
+    );
+  }
+
+  if (job.status !== 'completed') {
+    return (
+      <div className="p-6 text-center">
+        <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-blue-500" />
+        <p className="text-gray-600">Waiting for job completion...</p>
+        <p className="text-sm text-gray-500 mt-2">Status: {job.status}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="narration-view narration-view--export">
-      <div className="export-panel">
-        <div className="export-panel__header">
-          <div className="export-panel__title">
-            <Download className="export-panel__icon" />
-            <h2>Export Narration</h2>
-          </div>
+    <div className="p-6">
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold mb-2">Export Options</h3>
+        <p className="text-sm text-gray-600">
+          Download your narration in various formats or embed directly into PowerPoint.
+        </p>
+      </div>
 
-          {exportStatus.type !== 'idle' && (
-            <div className={`export-panel__status export-panel__status--${exportStatus.type}`}>
-              {exportStatus.type === 'exporting' && <Loader2 className="export-panel__status-icon" />}
-              {exportStatus.type === 'success' && <CheckCircle className="export-panel__status-icon" />}
-              {exportStatus.type === 'error' && <AlertCircle className="export-panel__status-icon" />}
-              <span className="export-panel__status-message">{exportStatus.message}</span>
-              {exportStatus.type !== 'exporting' && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setExportStatus({ type: 'idle', message: '' })}
-                  className="export-panel__status-dismiss"
-                >
-                  <X className="export-panel__status-icon" />
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Narration Summary */}
-        <div className="export-panel__section">
-          <h3 className="export-panel__section-title">Narration Summary</h3>
-          <div className="export-summary">
-            <div className="export-summary__row">
-              <span className="export-summary__label">Slides with narration:</span>
-              <span className="export-summary__value">
-                {slideScripts.filter(script => script.narrationAudioUrl).length} / {slideScripts.length}
-              </span>
-            </div>
-            <div className="export-summary__row">
-              <span className="export-summary__label">Total duration:</span>
-              <span className="export-summary__value">
-                {Math.floor(totalDuration / 60)}:{(totalDuration % 60).toFixed(0).padStart(2, '0')}
-              </span>
-            </div>
-            <div className="export-summary__row">
-              <span className="export-summary__label">Voice:</span>
-              <span className="export-summary__value">{voiceSettings.voice}</span>
-            </div>
-            <div className="export-summary__row">
-              <span className="export-summary__label">Language:</span>
-              <span className="export-summary__value">{voiceSettings.language}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Export Options */}
-        <div className="export-panel__section">
-          <h3 className="export-panel__section-title">Export Options</h3>
-          <div className="export-options">
-            <div className="export-options__row">
-              <label className="export-options__radio-label">
-                <input
-                  type="radio"
-                  name="exportFormat"
-                  value="mp4"
-                  checked={selectedExportFormat === 'mp4'}
-                  onChange={(e) => setSelectedExportFormat(e.target.value as 'mp4')}
-                />
-                <FileVideo className="export-options__icon" />
-                <span className="export-options__label-text">
-                  <strong>MP4 Video</strong>
-                  <small>Combined audio and video export</small>
-                </span>
-              </label>
-            </div>
-            <div className="export-options__row">
-              <label className="export-options__radio-label">
-                <input
-                  type="radio"
-                  name="exportFormat"
-                  value="pptx"
-                  checked={selectedExportFormat === 'pptx'}
-                  onChange={(e) => setSelectedExportFormat(e.target.value as 'pptx')}
-                />
-                <Download className="export-options__icon" />
-                <span className="export-options__label-text">
-                  <strong>PowerPoint with Embedded Audio</strong>
-                  <small>Enhanced PPTX with narration</small>
-                </span>
-              </label>
-            </div>
-            <div className="export-options__row">
-              <label className="export-options__checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={includeSubtitles}
-                  onChange={(e) => setIncludeSubtitles(e.target.checked)}
-                />
-                <span className="export-options__label-text">
-                  Include subtitles/captions
-                </span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        {/* Export Actions */}
-        <div className="export-panel__section">
-          <h3 className="export-panel__section-title">Export Actions</h3>
-          <div className="export-actions">
-            <Button
-              onClick={handleExport}
-              disabled={!hasNarration || isExporting}
-              className="export-actions__primary"
+      {/* Available Exports */}
+      <div className="mb-6">
+        <h4 className="font-medium mb-3">Available Downloads</h4>
+        {exports.length === 0 ? (
+          <div className="text-center py-4 text-gray-500">
+            <p>No exports available yet</p>
+            <button 
+              onClick={loadExports}
+              className="mt-2 text-blue-500 hover:text-blue-600 text-sm"
             >
-              {isExporting ? (
-                <>
-                  <Loader2 className="export-actions__icon" />
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <Download className="export-actions__icon" />
-                  Export {selectedExportFormat.toUpperCase()}
-                </>
-              )}
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={handleEmbedNarration}
-              disabled={!hasNarration || isExporting}
-              className="export-actions__secondary"
-            >
-              <Volume2 className="export-actions__icon" />
-              Embed in Current Deck
-            </Button>
+              Refresh
+            </button>
           </div>
-        </div>
-
-        {/* Available Downloads */}
-        {audioExports.length > 0 && (
-          <div className="export-panel__section">
-            <h3 className="export-panel__section-title">Available Downloads</h3>
-            <div className="export-downloads">
-              {audioExports.map((exportInfo, index) => {
-                const resolvedUrl = resolveDownloadUrl(exportInfo.downloadUrl || exportInfo.path);
-                return (
-                  <div key={`export-${exportInfo.format}-${index}`} className="export-download__item">
-                    <div className="export-download__info">
-                      <FileAudio className="export-download__icon" />
-                      <div className="export-download__details">
-                        <span className="export-download__format">{exportInfo.format.toUpperCase()}</span>
-                        {exportInfo.fileSize && (
-                          <span className="export-download__size">
-                            {(exportInfo.fileSize / 1024 / 1024).toFixed(2)} MB
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="export-download__actions">
-                      {resolvedUrl ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDownload(exportInfo)}
-                          className="export-download__button"
-                        >
-                          <Download className="export-download__button-icon" />
-                        </Button>
-                      ) : (
-                        <span className="export-download__unavailable">Not available</span>
-                      )}
-                    </div>
+        ) : (
+          <div className="space-y-2">
+            {exports.map((exportItem, index) => (
+              <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                <div className="flex items-center space-x-3">
+                  {getFormatIcon(exportItem.format)}
+                  <div>
+                    <span className="font-medium">{exportItem.format.toUpperCase()}</span>
+                    <span className="text-sm text-gray-500 ml-2">
+                      ({formatFileSize(exportItem.size)})
+                    </span>
                   </div>
-                );
-              })}
+                  {getStatusIcon(exportItem.status)}
+                </div>
+                <button
+                  onClick={() => downloadFile(exportItem.format, exportItem.url)}
+                  disabled={exportItem.status !== 'ready'}
+                  className="flex items-center space-x-2 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* PowerPoint Embed */}
+      <div className="border-t pt-6">
+        <h4 className="font-medium mb-3">PowerPoint Integration</h4>
+        <div className="bg-blue-50 p-4 rounded-lg mb-4">
+          <div className="flex items-start space-x-3">
+            <Play className="w-5 h-5 text-blue-500 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-blue-900">Embed Audio</p>
+              <p className="text-sm text-blue-700">
+                Add the narration audio directly to your PowerPoint presentation. 
+                The audio will play automatically when the slide is shown.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={embedAudioInPowerPoint}
+          disabled={isEmbedding || exports.length === 0}
+          className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+        >
+          {isEmbedding ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Embedding...</span>
+            </>
+          ) : (
+            <>
+              <Save className="w-5 h-5" />
+              <span>Embed Audio in PowerPoint</span>
+            </>
+          )}
+        </button>
+
+        {/* Embed Status */}
+        {embedStatus !== 'idle' && (
+          <div className={`mt-3 p-3 rounded-lg ${
+            embedStatus === 'success' ? 'bg-green-50 text-green-800' :
+            embedStatus === 'error' ? 'bg-red-50 text-red-800' :
+            'bg-blue-50 text-blue-800'
+          }`}>
+            <div className="flex items-center space-x-2">
+              {embedStatus === 'success' && <CheckCircle className="w-4 h-4" />}
+              {embedStatus === 'error' && <AlertCircle className="w-4 h-4" />}
+              {embedStatus === 'embedding' && <Loader2 className="w-4 h-4 animate-spin" />}
+              <span className="text-sm">{embedMessage}</span>
             </div>
           </div>
         )}
+      </div>
 
-        {/* Info Section */}
-        <div className="export-panel__section export-panel__section--info">
-          <div className="export-info">
-            <Info className="export-info__icon" />
-            <div className="export-info__content">
-              <h4>Export Information</h4>
-              <ul>
-                <li><strong>MP4:</strong> Creates a video file with synchronized narration and slide transitions</li>
-                <li><strong>PPTX:</strong> Generates an enhanced PowerPoint file with embedded audio and optional subtitles</li>
-                <li><strong>Embed:</strong> Adds narration directly to your current presentation</li>
-              </ul>
-            </div>
-          </div>
-        </div>
+      {/* Instructions */}
+      <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+        <h5 className="font-medium mb-2">Usage Instructions</h5>
+        <ul className="text-sm text-gray-600 space-y-1">
+          <li>• Download MP3 for audio-only playback</li>
+          <li>• Download MP4 for video with audio</li>
+          <li>• Download VTT/SRT for subtitle files</li>
+          <li>• Use "Embed Audio" to add narration directly to PowerPoint</li>
+          <li>• Embedded audio will play automatically when presenting</li>
+        </ul>
       </div>
     </div>
   );

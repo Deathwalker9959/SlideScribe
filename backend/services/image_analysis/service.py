@@ -206,7 +206,14 @@ class ImageAnalysisService:
         callouts = list(metadata.get("callouts", [])) if metadata else []
         data_points = list(metadata.get("data_points", [])) if metadata else []
 
-        lowercase_tokens = {token.lower() for token in (*tags, caption.split())}
+        # Build lowercase tokens safely
+        tokens = list(tags) if tags else []
+        if caption and isinstance(caption, str):
+            tokens.extend(caption.split())
+        elif caption and isinstance(caption, list):
+            tokens.extend(str(caption).split())
+        lowercase_tokens = {token.lower() for token in tokens}
+
         chart_keywords = {"chart", "graph", "diagram", "plot", "visual"}
         if any(keyword in lowercase_tokens for keyword in chart_keywords):
             if "Invite the audience to look at the chart or graph while you summarize the takeaway." not in chart_insights:

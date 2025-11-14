@@ -24,6 +24,9 @@ class AzureTTSEngine(TTSEngine):
         language: str | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
+        import time
+        start_time = time.time()
+
         headers = {
             "Ocp-Apim-Subscription-Key": self.api_key,
             "Content-Type": "application/ssml+xml",
@@ -31,10 +34,14 @@ class AzureTTSEngine(TTSEngine):
             "User-Agent": "pptx-tts-service",
         }
         locale = language or self._derive_language_from_voice(voice)
+        # Convert speed to percentage and pitch to relative value
+        rate_percent = f"{speed * 100:g}%"  # 1.0 -> 100%, 1.5 -> 150%
+        pitch_value = f"{pitch:+.0f}Hz" if pitch != 0 else "0Hz"  # 0 -> 0Hz, +5 -> +5Hz
+
         ssml = (
             f"<speak version='1.0' xml:lang='{locale}'>"
             f"<voice xml:lang='{locale}' name='{voice}'>"
-            f"<prosody rate='{speed}' pitch='{pitch}'>{text}</prosody>"
+            f"<prosody rate='{rate_percent}' pitch='{pitch_value}'>{text}</prosody>"
             f"</voice></speak>"
         )
         async with (
@@ -53,12 +60,23 @@ class AzureTTSEngine(TTSEngine):
             file_path = os.path.join(output_dir, filename)
             with open(file_path, "wb") as f:
                 f.write(audio_data)
+
+            # Estimate duration based on text length and speed (rough estimate)
+            words_per_minute = 150 * speed  # Average reading speed adjusted for speech rate
+            estimated_words = len(text.split())
+            estimated_duration = (estimated_words / words_per_minute) * 60  # Convert to seconds
+
+            processing_time = time.time() - start_time
+
             return {
                 "audio_url": f"/media/{filename}",
                 "file_path": file_path,
                 "voice_used": voice,
                 "output_format": file_extension,
                 "language": locale,
+                "duration": estimated_duration,
+                "processing_time": processing_time,
+                "file_size": len(audio_data),
             }
 
     @staticmethod
@@ -67,7 +85,9 @@ class AzureTTSEngine(TTSEngine):
             return "riff-24khz-16bit-mono-pcm"
         if output_format == "ogg":
             return "ogg-48khz-16bit-mono-opus"
-        return "audio-16khz-64kbitrate-mono-mp3"
+        if output_format == "mp3":
+            return "audio-16khz-128kbitrate-mono-mp3"
+        return "audio-16khz-128kbitrate-mono-mp3"  # Default to higher quality MP3
 
     async def synthesize_ssml(
         self,

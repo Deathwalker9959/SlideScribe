@@ -179,22 +179,22 @@ class TestNarrationOrchestrator:
 
         result = await orchestrator.process_slide("test_job", slide, 1, tts_options={})
 
-            assert result["status"] == "completed"
-            assert result["slide_id"] == "test_slide"
-            assert result["slide_number"] == 1
-            assert "refined_content" in result
-            assert "audio_result" in result
-            assert "audio_file_path" in result
-            assert "subtitles" in result
-            assert "processing_time" in result
-            assert "contextual_metadata" in result
-            assert result["contextual_metadata"]["image_references"] == ["Image 1: chart description"]
-            assert result["contextual_metadata"]["confidence"] == 0.8
+        assert result["status"] == "completed"
+        assert result["slide_id"] == "test_slide"
+        assert result["slide_number"] == 1
+        assert "refined_content" in result
+        assert "audio_result" in result
+        assert "audio_file_path" in result
+        assert "subtitles" in result
+        assert "processing_time" in result
+        assert "contextual_metadata" in result
+        assert result["contextual_metadata"]["image_references"] == ["Image 1: chart description"]
+        assert result["contextual_metadata"]["confidence"] == 0.8
 
-            # Verify services were called
-            mock_ai.refine_text.assert_called_once()
-            mock_ai.refine_with_context.assert_called_once()
-            mock_tts.synthesize_speech.assert_called_once()
+        # Verify services were called
+        mock_ai.refine_text.assert_called_once()
+        mock_ai.refine_with_context.assert_called_once()
+        mock_tts.synthesize_speech.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_process_slide_handles_failure(self, orchestrator):
@@ -211,10 +211,10 @@ class TestNarrationOrchestrator:
 
         result = await orchestrator.process_slide("test_job", slide, 1, tts_options={})
 
-            assert result["status"] == "failed"
-            assert result["slide_id"] == "test_slide"
-            assert "error" in result
-            assert "AI service failed" in result["error"]
+        assert result["status"] == "failed"
+        assert result["slide_id"] == "test_slide"
+        assert "error" in result
+        assert "AI service failed" in result["error"]
 
     @pytest.mark.asyncio
     async def test_process_slide_with_image_analysis(self, orchestrator):
