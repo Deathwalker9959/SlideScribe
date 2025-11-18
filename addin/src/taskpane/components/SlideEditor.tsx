@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { Card } from '@ui/card';
-import { Button } from '@ui/button';
-import { Textarea } from '@ui/textarea';
-import { Badge } from '@ui/badge';
-import { AlertTriangle, CheckCircle, Lightbulb } from 'lucide-react';
+import React, { useState } from "react";
+import { Card } from "@ui/card";
+import { Button } from "@ui/button";
+import { Textarea } from "@ui/textarea";
+import { Badge } from "@ui/badge";
+import { AlertTriangle, CheckCircle, Lightbulb } from "lucide-react";
 
 interface Slide {
   id: string;
@@ -13,7 +13,7 @@ interface Slide {
 
 interface Suggestion {
   id: string;
-  type: 'grammar' | 'style' | 'clarity';
+  type: "grammar" | "style" | "clarity";
   text: string;
   suggestion: string;
   position: { start: number; end: number };
@@ -26,8 +26,13 @@ interface SlideEditorProps {
   onApplySuggestion: (suggestionId: string) => void;
 }
 
-export function SlideEditor({ slide, onSlideUpdate, suggestions, onApplySuggestion }: SlideEditorProps) {
-  const [selectedText, setSelectedText] = useState('');
+export function SlideEditor({
+  slide,
+  onSlideUpdate,
+  suggestions,
+  onApplySuggestion,
+}: SlideEditorProps) {
+  const [selectedText, setSelectedText] = useState("");
 
   const handleTitleChange = (value: string) => {
     onSlideUpdate({ ...slide, title: value });
@@ -39,11 +44,11 @@ export function SlideEditor({ slide, onSlideUpdate, suggestions, onApplySuggesti
 
   const getSuggestionIcon = (type: string) => {
     switch (type) {
-      case 'grammar':
+      case "grammar":
         return <AlertTriangle className="w-4 h-4 text-red-500" />;
-      case 'style':
+      case "style":
         return <Lightbulb className="w-4 h-4 text-yellow-500" />;
-      case 'clarity':
+      case "clarity":
         return <CheckCircle className="w-4 h-4 text-blue-500" />;
       default:
         return <Lightbulb className="w-4 h-4" />;
@@ -52,14 +57,14 @@ export function SlideEditor({ slide, onSlideUpdate, suggestions, onApplySuggesti
 
   const getSuggestionColor = (type: string) => {
     switch (type) {
-      case 'grammar':
-        return 'bg-red-50 border-red-200';
-      case 'style':
-        return 'bg-yellow-50 border-yellow-200';
-      case 'clarity':
-        return 'bg-blue-50 border-blue-200';
+      case "grammar":
+        return "bg-red-50 border-red-200";
+      case "style":
+        return "bg-yellow-50 border-yellow-200";
+      case "clarity":
+        return "bg-blue-50 border-blue-200";
       default:
-        return 'bg-gray-50 border-gray-200';
+        return "bg-gray-50 border-gray-200";
     }
   };
 
@@ -77,7 +82,7 @@ export function SlideEditor({ slide, onSlideUpdate, suggestions, onApplySuggesti
               className="min-h-[60px] text-lg font-medium resize-none"
             />
           </div>
-          
+
           <div className="flex-1">
             <label className="block mb-2 text-sm font-medium">Slide Content</label>
             <Textarea
@@ -96,7 +101,7 @@ export function SlideEditor({ slide, onSlideUpdate, suggestions, onApplySuggesti
           <Lightbulb className="w-4 h-4" />
           Suggestions ({suggestions.length})
         </h3>
-        
+
         <div className="space-y-2 max-h-40 overflow-y-auto">
           {suggestions.length === 0 ? (
             <p className="text-sm text-muted-foreground">No suggestions available</p>

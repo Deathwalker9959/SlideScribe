@@ -16,8 +16,8 @@ class ServiceConfig:
 
     def __init__(self) -> None:
         """Initialize configuration by loading environment variables."""
-        # Always load .env from project root
-        env_path = os.path.join(os.path.dirname(__file__), "../../.env")
+        # Always load .env from backend directory (where app.py is located)
+        env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.env"))
         load_dotenv(dotenv_path=env_path, override=True)
         self.config: dict[str, Any] = {}
         self.pipeline_config: dict[str, Any] = {}
@@ -32,6 +32,12 @@ class ServiceConfig:
         """Load configuration from environment variables."""
         self.config = {
             "openai_api_key": os.getenv("OPENAI_API_KEY"),
+            "azure_openai_key": os.getenv("AZURE_OPENAI_KEY"),
+            "azure_openai_endpoint": os.getenv("AZURE_OPENAI_ENDPOINT"),
+            "azure_openai_deployment": os.getenv("AZURE_OPENAI_DEPLOYMENT"),
+            "azure_openai_api_version": os.getenv("AZURE_OPENAI_API_VERSION"),
+            "use_azure_openai": os.getenv("USE_AZURE_OPENAI", "false").lower() == "true",
+            "use_azure_openai_vision": os.getenv("USE_AZURE_OPENAI_VISION", "false").lower() == "true",
             "azure_speech_key": os.getenv("AZURE_SPEECH_KEY"),
             "azure_speech_region": os.getenv("AZURE_SPEECH_REGION"),
             "azure_vision_endpoint": os.getenv("AZURE_VISION_ENDPOINT"),
@@ -44,6 +50,9 @@ class ServiceConfig:
             "image_analysis_provider": os.getenv("IMAGE_ANALYSIS_PROVIDER", "stub"),
             "image_analysis_cache_ttl": int(os.getenv("IMAGE_ANALYSIS_CACHE_TTL", "3600")),
             "image_analysis_openai_model": os.getenv("IMAGE_ANALYSIS_OPENAI_MODEL", "gpt-4o-mini"),
+            "auth_driver": os.getenv("AUTH_DRIVER", "database"),
+            "auth_session_expire_minutes": int(os.getenv("AUTH_SESSION_EXPIRE_MINUTES", "1440")),
+            "auth_anonymous_session_expire_minutes": int(os.getenv("AUTH_ANONYMOUS_SESSION_EXPIRE_MINUTES", "480")),
         }
 
     def get(self, key: str, default: Any = None) -> Any:

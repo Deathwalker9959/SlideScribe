@@ -1,12 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Button } from '@ui/button';
-import { Slider } from '@ui/slider';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/select';
-import { Card } from '@ui/card';
-import { Badge } from '@ui/badge';
-import { RefreshCw, Volume2, Gauge, Music, Globe, Wand2, Play } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from "react";
+import { Button } from "@ui/button";
+import { Slider } from "@ui/slider";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select";
+import { Card } from "@ui/card";
+import { Badge } from "@ui/badge";
+import { RefreshCw, Volume2, Gauge, Music, Globe, Wand2, Play } from "lucide-react";
 
-export type VoiceProvider = 'azure' | 'openai';
+export type VoiceProvider = "azure" | "openai";
 
 export interface VoiceSettingsValue {
   provider: VoiceProvider;
@@ -14,18 +14,18 @@ export interface VoiceSettingsValue {
   speed: number; // 0.5 - 2.0
   pitch: number; // -50 - 50 semitones
   volume: number; // 0.1 - 2.0 multiplier
-  tone: 'professional' | 'casual' | 'enthusiastic' | 'calm';
+  tone: "professional" | "casual" | "enthusiastic" | "calm";
   language: string;
 }
 
 export const DEFAULT_VOICE_SETTINGS: VoiceSettingsValue = {
-  provider: 'azure',
-  voiceName: 'en-US-AriaNeural',
+  provider: "azure",
+  voiceName: "en-US-AriaNeural",
   speed: 1.0,
   pitch: 0,
   volume: 1.0,
-  tone: 'professional',
-  language: 'en-US',
+  tone: "professional",
+  language: "en-US",
 };
 
 interface VoiceSettingsProps {
@@ -51,35 +51,46 @@ interface SavedProfile {
   speed: number;
   pitch: number;
   volume: number;
-  tone: VoiceSettingsValue['tone'];
+  tone: VoiceSettingsValue["tone"];
   language: string;
 }
 
 const DEFAULT_VOICES: VoiceOption[] = [
-  { id: 'en-US-AriaNeural', label: 'Aria (English US)', provider: 'azure', language: 'en-US' },
-  { id: 'en-US-GuyNeural', label: 'Guy (English US)', provider: 'azure', language: 'en-US' },
-  { id: 'en-GB-LibbyNeural', label: 'Libby (English UK)', provider: 'azure', language: 'en-GB' },
-  { id: 'alloy', label: 'Alloy (English)', provider: 'openai', language: 'en-US' },
-  { id: 'versatile', label: 'Versatile (English)', provider: 'openai', language: 'en-US' },
+  { id: "en-US-AriaNeural", label: "Aria (English US)", provider: "azure", language: "en-US" },
+  { id: "en-US-GuyNeural", label: "Guy (English US)", provider: "azure", language: "en-US" },
+  { id: "en-GB-LibbyNeural", label: "Libby (English UK)", provider: "azure", language: "en-GB" },
+  { id: "alloy", label: "Alloy (English)", provider: "openai", language: "en-US" },
+  { id: "versatile", label: "Versatile (English)", provider: "openai", language: "en-US" },
 ];
 
-const TONE_OPTIONS: VoiceSettingsValue['tone'][] = ['professional', 'casual', 'enthusiastic', 'calm'];
+const TONE_OPTIONS: VoiceSettingsValue["tone"][] = [
+  "professional",
+  "casual",
+  "enthusiastic",
+  "calm",
+];
 
-export function VoiceSettings({ value, onChange, onPreview, buildBackendUrl, disabled }: VoiceSettingsProps) {
+export function VoiceSettings({
+  value,
+  onChange,
+  onPreview,
+  buildBackendUrl,
+  disabled,
+}: VoiceSettingsProps) {
   const [availableVoices, setAvailableVoices] = useState<VoiceOption[]>(DEFAULT_VOICES);
   const [loadingVoices, setLoadingVoices] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<SavedProfile[]>([]);
-  const [selectedProfileId, setSelectedProfileId] = useState<string>('');
+  const [selectedProfileId, setSelectedProfileId] = useState<string>("");
 
   useEffect(() => {
     const fetchVoices = async () => {
       setLoadingVoices(true);
       setError(null);
       try {
-        const response = await fetch(buildBackendUrl('/api/v1/tts/drivers'), {
-          headers: { Authorization: 'Bearer test_token' },
+        const response = await fetch(buildBackendUrl("/api/v1/tts/drivers"), {
+          headers: { Authorization: "Bearer test_token" },
         });
         if (!response.ok) {
           throw new Error(`Failed to fetch voices (${response.status})`);
@@ -88,14 +99,14 @@ export function VoiceSettings({ value, onChange, onPreview, buildBackendUrl, dis
         const drivers = data?.drivers ?? {};
         const parsed: VoiceOption[] = [];
         Object.entries(drivers).forEach(([providerKey, details]) => {
-          const provider = providerKey === 'openai' ? 'openai' : 'azure';
+          const provider = providerKey === "openai" ? "openai" : "azure";
           const voices = (details as any)?.supported_voices ?? [];
           voices.forEach((voice: string) => {
             parsed.push({
               id: voice,
               label: voice,
               provider,
-              language: provider === 'azure' ? voice.split('-').slice(0, 2).join('-') : 'en-US',
+              language: provider === "azure" ? voice.split("-").slice(0, 2).join("-") : "en-US",
             });
           });
         });
@@ -103,8 +114,8 @@ export function VoiceSettings({ value, onChange, onPreview, buildBackendUrl, dis
           setAvailableVoices(parsed);
         }
       } catch (err) {
-        console.warn('Voice fetch failed, using defaults', err);
-        setError(err instanceof Error ? err.message : 'Unable to load voices');
+        console.warn("Voice fetch failed, using defaults", err);
+        setError(err instanceof Error ? err.message : "Unable to load voices");
       } finally {
         setLoadingVoices(false);
       }
@@ -112,8 +123,8 @@ export function VoiceSettings({ value, onChange, onPreview, buildBackendUrl, dis
 
     const fetchProfiles = async () => {
       try {
-        const response = await fetch(buildBackendUrl('/api/v1/voice-profiles/list'), {
-          headers: { Authorization: 'Bearer test_token' },
+        const response = await fetch(buildBackendUrl("/api/v1/voice-profiles/list"), {
+          headers: { Authorization: "Bearer test_token" },
         });
         if (!response.ok) {
           throw new Error(`Failed to load profiles (${response.status})`);
@@ -124,18 +135,18 @@ export function VoiceSettings({ value, onChange, onPreview, buildBackendUrl, dis
             data.map((profile) => ({
               id: profile.id,
               name: profile.name,
-              provider: profile.provider ?? 'azure',
-              voice: profile.voice ?? profile.voiceName ?? 'en-US-AriaNeural',
+              provider: profile.provider ?? "azure",
+              voice: profile.voice ?? profile.voiceName ?? "en-US-AriaNeural",
               speed: profile.speed ?? 1.0,
               pitch: profile.pitch ?? 0,
               volume: profile.volume ?? 1.0,
-              tone: (profile.tone ?? 'professional') as VoiceSettingsValue['tone'],
-              language: profile.language ?? 'en-US',
+              tone: (profile.tone ?? "professional") as VoiceSettingsValue["tone"],
+              language: profile.language ?? "en-US",
             }))
           );
         }
       } catch (err) {
-        console.warn('Unable to load saved profiles', err);
+        console.warn("Unable to load saved profiles", err);
       }
     };
 
@@ -168,9 +179,9 @@ export function VoiceSettings({ value, onChange, onPreview, buildBackendUrl, dis
     });
   };
 
-  const handleSliderChange = (key: 'speed' | 'pitch' | 'volume', val: number[]) => {
+  const handleSliderChange = (key: "speed" | "pitch" | "volume", val: number[]) => {
     const next = val[0];
-      onChange({ ...value, [key]: next });
+    onChange({ ...value, [key]: next });
   };
 
   const handleApplyProfile = (profileId: string) => {
@@ -192,21 +203,21 @@ export function VoiceSettings({ value, onChange, onPreview, buildBackendUrl, dis
   };
 
   const handleSaveProfile = async () => {
-    const name = window.prompt('Profile name');
+    const name = window.prompt("Profile name");
     if (!name) {
       return;
     }
-    setProfileStatus('Saving profile...');
+    setProfileStatus("Saving profile...");
     try {
-      const response = await fetch(buildBackendUrl('/api/v1/voice-profiles/create'), {
-        method: 'POST',
+      const response = await fetch(buildBackendUrl("/api/v1/voice-profiles/create"), {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer test_token',
+          "Content-Type": "application/json",
+          Authorization: "Bearer test_token",
         },
         body: JSON.stringify({
           name,
-          description: 'Saved from add-in debug panel',
+          description: "Saved from add-in debug panel",
           voice: value.voiceName,
           language: value.language,
           style: value.tone,
@@ -219,8 +230,8 @@ export function VoiceSettings({ value, onChange, onPreview, buildBackendUrl, dis
         throw new Error(`Profile save failed (${response.status})`);
       }
       setProfileStatus(`Saved profile “${name}”.`);
-      const refreshed = await fetch(buildBackendUrl('/api/v1/voice-profiles/list'), {
-        headers: { Authorization: 'Bearer test_token' },
+      const refreshed = await fetch(buildBackendUrl("/api/v1/voice-profiles/list"), {
+        headers: { Authorization: "Bearer test_token" },
       });
       if (refreshed.ok) {
         const data = await refreshed.json();
@@ -229,20 +240,20 @@ export function VoiceSettings({ value, onChange, onPreview, buildBackendUrl, dis
             data.map((profile) => ({
               id: profile.id,
               name: profile.name,
-              provider: profile.provider ?? 'azure',
+              provider: profile.provider ?? "azure",
               voice: profile.voice ?? profile.voiceName ?? value.voiceName,
               speed: profile.speed ?? value.speed,
               pitch: profile.pitch ?? value.pitch,
               volume: profile.volume ?? value.volume,
-              tone: (profile.tone ?? value.tone) as VoiceSettingsValue['tone'],
+              tone: (profile.tone ?? value.tone) as VoiceSettingsValue["tone"],
               language: profile.language ?? value.language,
             }))
           );
         }
       }
     } catch (err) {
-      console.error('Save profile error', err);
-      setProfileStatus(err instanceof Error ? err.message : 'Failed to save profile.');
+      console.error("Save profile error", err);
+      setProfileStatus(err instanceof Error ? err.message : "Failed to save profile.");
     }
   };
 
@@ -251,27 +262,34 @@ export function VoiceSettings({ value, onChange, onPreview, buildBackendUrl, dis
       <div className="voice-settings__header">
         <div>
           <h3 className="voice-settings__title">Voice Configuration</h3>
-          <p className="voice-settings__subtitle">Choose a provider and fine-tune narration delivery.</p>
+          <p className="voice-settings__subtitle">
+            Choose a provider and fine-tune narration delivery.
+          </p>
         </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="voice-settings__refresh"
-            onClick={() => {
-              setAvailableVoices(DEFAULT_VOICES);
-              setError(null);
-              onChange(DEFAULT_VOICE_SETTINGS);
-            }}
-            disabled={disabled}
-          >
-            <RefreshCw className="voice-settings__icon" /> Reset
-          </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="voice-settings__refresh"
+          onClick={() => {
+            setAvailableVoices(DEFAULT_VOICES);
+            setError(null);
+            onChange(DEFAULT_VOICE_SETTINGS);
+          }}
+          disabled={disabled}
+        >
+          <RefreshCw className="voice-settings__icon" /> Reset
+        </Button>
       </div>
 
       <div className="voice-settings__grid">
         <div className="voice-settings__field">
           <label className="voice-settings__label">Provider</label>
-          <Select value={value.provider} onValueChange={(provider) => onChange({ ...value, provider: provider as VoiceProvider })}>
+          <Select
+            value={value.provider}
+            onValueChange={(provider) =>
+              onChange({ ...value, provider: provider as VoiceProvider })
+            }
+          >
             <SelectTrigger className="voice-settings__select">
               <SelectValue />
             </SelectTrigger>
@@ -297,13 +315,18 @@ export function VoiceSettings({ value, onChange, onPreview, buildBackendUrl, dis
             </SelectContent>
           </Select>
           <div className="voice-settings__hint">
-            {loadingVoices ? 'Loading voices...' : voiceSettingsSummary(value, availableVoices)}
+            {loadingVoices ? "Loading voices..." : voiceSettingsSummary(value, availableVoices)}
           </div>
         </div>
 
         <div className="voice-settings__field">
           <label className="voice-settings__label">Tone</label>
-          <Select value={value.tone} onValueChange={(tone) => onChange({ ...value, tone: tone as VoiceSettingsValue['tone'] })}>
+          <Select
+            value={value.tone}
+            onValueChange={(tone) =>
+              onChange({ ...value, tone: tone as VoiceSettingsValue["tone"] })
+            }
+          >
             <SelectTrigger className="voice-settings__select">
               <SelectValue />
             </SelectTrigger>
@@ -333,7 +356,7 @@ export function VoiceSettings({ value, onChange, onPreview, buildBackendUrl, dis
           </label>
           <Slider
             value={[value.speed]}
-            onValueChange={(val) => handleSliderChange('speed', val)}
+            onValueChange={(val) => handleSliderChange("speed", val)}
             min={0.5}
             max={2.0}
             step={0.05}
@@ -345,7 +368,7 @@ export function VoiceSettings({ value, onChange, onPreview, buildBackendUrl, dis
           </label>
           <Slider
             value={[value.pitch]}
-            onValueChange={(val) => handleSliderChange('pitch', val)}
+            onValueChange={(val) => handleSliderChange("pitch", val)}
             min={-50}
             max={50}
             step={1}
@@ -357,7 +380,7 @@ export function VoiceSettings({ value, onChange, onPreview, buildBackendUrl, dis
           </label>
           <Slider
             value={[value.volume]}
-            onValueChange={(val) => handleSliderChange('volume', val)}
+            onValueChange={(val) => handleSliderChange("volume", val)}
             min={0.1}
             max={2.0}
             step={0.05}
@@ -392,23 +415,19 @@ export function VoiceSettings({ value, onChange, onPreview, buildBackendUrl, dis
 
       <div className="voice-settings__footer">
         <Badge variant="secondary">Tone: {titleCase(value.tone)}</Badge>
-          <div className="voice-settings__actions">
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => onChange(DEFAULT_VOICE_SETTINGS)}
-              disabled={disabled}
-            >
-              <Wand2 className="voice-settings__icon" /> Reset settings
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => onPreview(value)}
-              disabled={disabled}
-            >
-              <Play className="voice-settings__icon" /> Preview voice
-            </Button>
-          </div>
+        <div className="voice-settings__actions">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => onChange(DEFAULT_VOICE_SETTINGS)}
+            disabled={disabled}
+          >
+            <Wand2 className="voice-settings__icon" /> Reset settings
+          </Button>
+          <Button size="sm" onClick={() => onPreview(value)} disabled={disabled}>
+            <Play className="voice-settings__icon" /> Preview voice
+          </Button>
+        </div>
       </div>
     </Card>
   );

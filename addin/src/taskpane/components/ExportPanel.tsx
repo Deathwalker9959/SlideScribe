@@ -1,6 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { Download, Play, FileAudio, FileVideo, FileText, Save, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
-import { NarrationJob } from '../../state/types';
+import React, { useState, useEffect } from "react";
+import {
+  Download,
+  Play,
+  FileAudio,
+  FileVideo,
+  FileText,
+  Save,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+} from "lucide-react";
+import { NarrationJob } from "../../state/types";
 
 interface ExportPanelProps {
   jobId: string | null;
@@ -12,19 +22,21 @@ interface ExportStatus {
   format: string;
   url: string;
   size: number;
-  status: 'ready' | 'processing' | 'error';
+  status: "ready" | "processing" | "error";
   message?: string;
 }
 
 export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedComplete }) => {
   const [exports, setExports] = useState<ExportStatus[]>([]);
   const [isEmbedding, setIsEmbedding] = useState(false);
-  const [embedStatus, setEmbedStatus] = useState<'idle' | 'embedding' | 'success' | 'error'>('idle');
-  const [embedMessage, setEmbedMessage] = useState('');
+  const [embedStatus, setEmbedStatus] = useState<"idle" | "embedding" | "success" | "error">(
+    "idle"
+  );
+  const [embedMessage, setEmbedMessage] = useState("");
 
   // Load available exports when job is complete
   useEffect(() => {
-    if (jobId && job?.status === 'completed') {
+    if (jobId && job?.status === "completed") {
       loadExports();
     }
   }, [jobId, job?.status]);
@@ -39,24 +51,24 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
         setExports(exportData.exports || []);
       }
     } catch (error) {
-      console.error('Failed to load exports:', error);
+      console.error("Failed to load exports:", error);
     }
   };
 
   const downloadFile = async (format: string, url: string) => {
     try {
       const response = await fetch(url);
-      if (!response.ok) throw new Error('Download failed');
-      
+      if (!response.ok) throw new Error("Download failed");
+
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = downloadUrl;
-      
+
       // Set filename based on format
       const extension = format.toLowerCase();
       a.download = `narration_${jobId}.${extension}`;
-      
+
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -70,14 +82,14 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
     if (!jobId || !Office) return;
 
     setIsEmbedding(true);
-    setEmbedStatus('embedding');
-    setEmbedMessage('Embedding audio into PowerPoint...');
+    setEmbedStatus("embedding");
+    setEmbedMessage("Embedding audio into PowerPoint...");
 
     try {
       // Get the audio export URL
-      const audioExport = exports.find(exp => exp.format.toLowerCase() === 'mp3');
+      const audioExport = exports.find((exp) => exp.format.toLowerCase() === "mp3");
       if (!audioExport) {
-        throw new Error('No audio export available');
+        throw new Error("No audio export available");
       }
 
       // Download audio data
@@ -95,13 +107,19 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
         const audioFileName = `narration_${jobId}.mp3`;
 
         // Add audio to slide
-        const audio = slide.shapes.addMediaObject(audioBase64, PowerPoint.MediaInsertType.audio, 
-          100, 100, 100, 100); // Position and size (will be adjusted)
+        const audio = slide.shapes.addMediaObject(
+          audioBase64,
+          PowerPoint.MediaInsertType.audio,
+          100,
+          100,
+          100,
+          100
+        ); // Position and size (will be adjusted)
 
         // Configure audio properties
         audio.media.playAutomatically = true;
         audio.media.hideWhilePlaying = true;
-        
+
         // Position audio off-slide (invisible but functional)
         audio.left = context.presentation.slideWidth + 100;
         audio.top = context.presentation.slideHeight + 100;
@@ -109,18 +127,19 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
         await context.sync();
       });
 
-      setEmbedStatus('success');
-      setEmbedMessage('Audio successfully embedded in PowerPoint!');
-      
+      setEmbedStatus("success");
+      setEmbedMessage("Audio successfully embedded in PowerPoint!");
+
       // Notify parent component
       if (onEmbedComplete) {
         onEmbedComplete();
       }
-
     } catch (error) {
-      console.error('Failed to embed audio:', error);
-      setEmbedStatus('error');
-      setEmbedMessage(`Failed to embed audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Failed to embed audio:", error);
+      setEmbedStatus("error");
+      setEmbedMessage(
+        `Failed to embed audio: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     } finally {
       setIsEmbedding(false);
     }
@@ -132,7 +151,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
       reader.onload = () => {
         const result = reader.result as string;
         // Remove data URL prefix to get pure base64
-        const base64 = result.split(',')[1];
+        const base64 = result.split(",")[1];
         resolve(base64);
       };
       reader.onerror = reject;
@@ -142,13 +161,13 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
 
   const getFormatIcon = (format: string) => {
     switch (format.toLowerCase()) {
-      case 'mp3':
-      case 'wav':
+      case "mp3":
+      case "wav":
         return <FileAudio className="w-4 h-4" />;
-      case 'mp4':
+      case "mp4":
         return <FileVideo className="w-4 h-4" />;
-      case 'vtt':
-      case 'srt':
+      case "vtt":
+      case "srt":
         return <FileText className="w-4 h-4" />;
       default:
         return <Download className="w-4 h-4" />;
@@ -157,11 +176,11 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'ready':
+      case "ready":
         return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'processing':
+      case "processing":
         return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />;
-      case 'error':
+      case "error":
         return <AlertCircle className="w-4 h-4 text-red-500" />;
       default:
         return null;
@@ -169,11 +188,11 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
   };
 
   const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) return "0 Bytes";
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
   if (!job) {
@@ -185,7 +204,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
     );
   }
 
-  if (job.status !== 'completed') {
+  if (job.status !== "completed") {
     return (
       <div className="p-6 text-center">
         <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-blue-500" />
@@ -210,7 +229,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
         {exports.length === 0 ? (
           <div className="text-center py-4 text-gray-500">
             <p>No exports available yet</p>
-            <button 
+            <button
               onClick={loadExports}
               className="mt-2 text-blue-500 hover:text-blue-600 text-sm"
             >
@@ -233,7 +252,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
                 </div>
                 <button
                   onClick={() => downloadFile(exportItem.format, exportItem.url)}
-                  disabled={exportItem.status !== 'ready'}
+                  disabled={exportItem.status !== "ready"}
                   className="flex items-center space-x-2 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
@@ -254,8 +273,8 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
             <div>
               <p className="text-sm font-medium text-blue-900">Embed Audio</p>
               <p className="text-sm text-blue-700">
-                Add the narration audio directly to your PowerPoint presentation. 
-                The audio will play automatically when the slide is shown.
+                Add the narration audio directly to your PowerPoint presentation. The audio will
+                play automatically when the slide is shown.
               </p>
             </div>
           </div>
@@ -280,16 +299,20 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
         </button>
 
         {/* Embed Status */}
-        {embedStatus !== 'idle' && (
-          <div className={`mt-3 p-3 rounded-lg ${
-            embedStatus === 'success' ? 'bg-green-50 text-green-800' :
-            embedStatus === 'error' ? 'bg-red-50 text-red-800' :
-            'bg-blue-50 text-blue-800'
-          }`}>
+        {embedStatus !== "idle" && (
+          <div
+            className={`mt-3 p-3 rounded-lg ${
+              embedStatus === "success"
+                ? "bg-green-50 text-green-800"
+                : embedStatus === "error"
+                  ? "bg-red-50 text-red-800"
+                  : "bg-blue-50 text-blue-800"
+            }`}
+          >
             <div className="flex items-center space-x-2">
-              {embedStatus === 'success' && <CheckCircle className="w-4 h-4" />}
-              {embedStatus === 'error' && <AlertCircle className="w-4 h-4" />}
-              {embedStatus === 'embedding' && <Loader2 className="w-4 h-4 animate-spin" />}
+              {embedStatus === "success" && <CheckCircle className="w-4 h-4" />}
+              {embedStatus === "error" && <AlertCircle className="w-4 h-4" />}
+              {embedStatus === "embedding" && <Loader2 className="w-4 h-4 animate-spin" />}
               <span className="text-sm">{embedMessage}</span>
             </div>
           </div>

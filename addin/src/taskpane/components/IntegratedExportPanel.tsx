@@ -1,9 +1,9 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { Button } from '@ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/card';
-import { Alert, AlertDescription } from '@ui/alert';
-import { Badge } from '@ui/badge';
-import { Progress } from '@ui/progress';
+import React, { useState, useCallback, useEffect } from "react";
+import { Button } from "@ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@ui/card";
+import { Alert, AlertDescription } from "@ui/alert";
+import { Badge } from "@ui/badge";
+import { Progress } from "@ui/progress";
 import {
   Download,
   Play,
@@ -21,8 +21,8 @@ import {
   Music,
   Share2,
   Eye,
-} from 'lucide-react';
-import { apiClient, AudioExport, VoiceSettings } from '@utils/apiClient';
+} from "lucide-react";
+import { apiClient, AudioExport, VoiceSettings } from "@utils/apiClient";
 
 // Types
 interface SlideScript {
@@ -56,8 +56,8 @@ interface ExportPanelProps {
   voiceSettings?: VoiceSettings;
 }
 
-type ExportFormat = 'mp4' | 'pptx' | 'audio' | 'subtitles';
-type ExportStatus = 'idle' | 'preparing' | 'processing' | 'completed' | 'error';
+type ExportFormat = "mp4" | "pptx" | "audio" | "subtitles";
+type ExportStatus = "idle" | "preparing" | "processing" | "completed" | "error";
 
 interface ExportJob {
   id: string;
@@ -70,21 +70,21 @@ interface ExportJob {
   createdAt: string;
 }
 
-export function IntegratedExportPanel({ 
-  slides, 
-  narrationJobId, 
+export function IntegratedExportPanel({
+  slides,
+  narrationJobId,
   isCompleted,
-  voiceSettings 
+  voiceSettings,
 }: ExportPanelProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportJobs, setExportJobs] = useState<ExportJob[]>([]);
-  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('mp4');
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>("mp4");
   const [includeSubtitles, setIncludeSubtitles] = useState(true);
   const [includeBackgroundMusic, setIncludeBackgroundMusic] = useState(false);
   const [exportStatus, setExportStatus] = useState<{
     type: ExportStatus;
     message: string;
-  }>({ type: 'idle', message: '' });
+  }>({ type: "idle", message: "" });
   const [availableExports, setAvailableExports] = useState<AudioExport[]>([]);
 
   // Load available exports when narration job is completed
@@ -99,157 +99,158 @@ export function IntegratedExportPanel({
 
     try {
       const response = await apiClient.getAudioExports(narrationJobId);
-      
+
       if (response.success && response.data) {
         setAvailableExports(response.data);
       }
     } catch (error) {
-      console.error('Failed to load audio exports:', error);
+      console.error("Failed to load audio exports:", error);
     }
   };
 
-  const handleExport = useCallback(async (format: ExportFormat) => {
-    if (!narrationJobId) {
-      setExportStatus({
-        type: 'error',
-        message: 'No narration job found. Please generate narration first.',
-      });
-      return;
-    }
-
-    setIsExporting(true);
-    setExportStatus({ type: 'preparing', message: 'Preparing export...' });
-
-    const exportJob: ExportJob = {
-      id: `export_${Date.now()}`,
-      format,
-      status: 'preparing',
-      progress: 0,
-      createdAt: new Date().toISOString(),
-    };
-
-    setExportJobs(prev => [...prev, exportJob]);
-
-    try {
-      let response;
-      
-      switch (format) {
-        case 'audio':
-          response = await apiClient.exportAudio(narrationJobId, {
-            format: 'mp3',
-            includeSubtitles,
-          });
-          break;
-          
-        case 'subtitles':
-          response = await apiClient.exportSubtitles(narrationJobId, {
-            format: 'srt',
-          });
-          break;
-          
-        case 'pptx':
-          response = await apiClient.exportPowerPoint(narrationJobId, {
-            includeAudio: true,
-            includeSubtitles,
-          });
-          break;
-          
-        case 'mp4':
-          response = await apiClient.exportVideo(narrationJobId, {
-            quality: '1080p',
-            includeSubtitles,
-            includeBackgroundMusic,
-          });
-          break;
-          
-        default:
-          throw new Error(`Unsupported export format: ${format}`);
+  const handleExport = useCallback(
+    async (format: ExportFormat) => {
+      if (!narrationJobId) {
+        setExportStatus({
+          type: "error",
+          message: "No narration job found. Please generate narration first.",
+        });
+        return;
       }
 
-      if (response.success) {
-        setExportJobs(prev => 
-          prev.map(job => 
-            job.id === exportJob.id 
-              ? { 
-                  ...job, 
-                  status: 'completed', 
-                  progress: 100,
-                  downloadUrl: response.data?.downloadUrl,
-                  fileSize: response.data?.fileSize,
-                }
-              : job
+      setIsExporting(true);
+      setExportStatus({ type: "preparing", message: "Preparing export..." });
+
+      const exportJob: ExportJob = {
+        id: `export_${Date.now()}`,
+        format,
+        status: "preparing",
+        progress: 0,
+        createdAt: new Date().toISOString(),
+      };
+
+      setExportJobs((prev) => [...prev, exportJob]);
+
+      try {
+        let response;
+
+        switch (format) {
+          case "audio":
+            response = await apiClient.exportAudio(narrationJobId, {
+              format: "mp3",
+              includeSubtitles,
+            });
+            break;
+
+          case "subtitles":
+            response = await apiClient.exportSubtitles(narrationJobId, {
+              format: "srt",
+            });
+            break;
+
+          case "pptx":
+            response = await apiClient.exportPowerPoint(narrationJobId, {
+              includeAudio: true,
+              includeSubtitles,
+            });
+            break;
+
+          case "mp4":
+            response = await apiClient.exportVideo(narrationJobId, {
+              quality: "1080p",
+              includeSubtitles,
+              includeBackgroundMusic,
+            });
+            break;
+
+          default:
+            throw new Error(`Unsupported export format: ${format}`);
+        }
+
+        if (response.success) {
+          setExportJobs((prev) =>
+            prev.map((job) =>
+              job.id === exportJob.id
+                ? {
+                    ...job,
+                    status: "completed",
+                    progress: 100,
+                    downloadUrl: response.data?.downloadUrl,
+                    fileSize: response.data?.fileSize,
+                  }
+                : job
+            )
+          );
+
+          setExportStatus({
+            type: "completed",
+            message: `Export completed successfully! ${response.data?.fileSize ? `File size: ${(response.data.fileSize / 1024 / 1024).toFixed(2)} MB` : ""}`,
+          });
+
+          // Reload available exports
+          await loadAvailableExports();
+        } else {
+          throw new Error(response.error || "Export failed");
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Export failed";
+
+        setExportJobs((prev) =>
+          prev.map((job) =>
+            job.id === exportJob.id ? { ...job, status: "error", error: errorMessage } : job
           )
         );
-        
-        setExportStatus({
-          type: 'completed',
-          message: `Export completed successfully! ${response.data?.fileSize ? `File size: ${(response.data.fileSize / 1024 / 1024).toFixed(2)} MB` : ''}`,
-        });
 
-        // Reload available exports
-        await loadAvailableExports();
-      } else {
-        throw new Error(response.error || 'Export failed');
+        setExportStatus({
+          type: "error",
+          message: errorMessage,
+        });
+      } finally {
+        setIsExporting(false);
       }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Export failed';
-      
-      setExportJobs(prev => 
-        prev.map(job => 
-          job.id === exportJob.id 
-            ? { ...job, status: 'error', error: errorMessage }
-            : job
-        )
-      );
-      
-      setExportStatus({
-        type: 'error',
-        message: errorMessage,
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  }, [narrationJobId, includeSubtitles, includeBackgroundMusic]);
+    },
+    [narrationJobId, includeSubtitles, includeBackgroundMusic]
+  );
 
   const handleDownload = useCallback(async (exportInfo: AudioExport | ExportJob) => {
-    const downloadUrl = 'downloadUrl' in exportInfo ? exportInfo.downloadUrl : exportInfo.path;
-    
+    const downloadUrl = "downloadUrl" in exportInfo ? exportInfo.downloadUrl : exportInfo.path;
+
     if (!downloadUrl) {
       setExportStatus({
-        type: 'error',
-        message: 'Download URL not available',
+        type: "error",
+        message: "Download URL not available",
       });
       return;
     }
 
     try {
       const response = await apiClient.downloadFile(downloadUrl);
-      
+
       if (response.success && response.data) {
         // Create download link
         const url = window.URL.createObjectURL(response.data);
-        const a = document.createElement('a');
+        const a = document.createElement("a");
         a.href = url;
-        
-        const format = 'format' in exportInfo ? exportInfo.format : 'mp4';
+
+        const format = "format" in exportInfo ? exportInfo.format : "mp4";
         a.download = `narration.${format}`;
-        
+
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
-        
+
         setExportStatus({
-          type: 'completed',
-          message: 'Download started successfully',
+          type: "completed",
+          message: "Download started successfully",
         });
       } else {
-        throw new Error(response.error || 'Download failed');
+        throw new Error(response.error || "Download failed");
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Download failed';
+      const errorMessage = error instanceof Error ? error.message : "Download failed";
       setExportStatus({
-        type: 'error',
+        type: "error",
         message: errorMessage,
       });
     }
@@ -258,32 +259,32 @@ export function IntegratedExportPanel({
   const handleEmbedNarration = useCallback(async () => {
     if (!narrationJobId) {
       setExportStatus({
-        type: 'error',
-        message: 'No narration job found. Please generate narration first.',
+        type: "error",
+        message: "No narration job found. Please generate narration first.",
       });
       return;
     }
 
     setIsExporting(true);
-    setExportStatus({ type: 'preparing', message: 'Embedding narration...' });
+    setExportStatus({ type: "preparing", message: "Embedding narration..." });
 
     try {
       const response = await apiClient.embedNarration(narrationJobId, {
-        targetSlides: slides.map(slide => slide.slideId),
+        targetSlides: slides.map((slide) => slide.slideId),
       });
 
       if (response.success) {
         setExportStatus({
-          type: 'completed',
-          message: 'Narration embedded successfully in PowerPoint!',
+          type: "completed",
+          message: "Narration embedded successfully in PowerPoint!",
         });
       } else {
-        throw new Error(response.error || 'Embedding failed');
+        throw new Error(response.error || "Embedding failed");
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Embedding failed';
+      const errorMessage = error instanceof Error ? error.message : "Embedding failed";
       setExportStatus({
-        type: 'error',
+        type: "error",
         message: errorMessage,
       });
     } finally {
@@ -291,45 +292,55 @@ export function IntegratedExportPanel({
     }
   }, [narrationJobId, slides]);
 
-  const hasNarration = slides.some(slide => slide.audioUrl);
+  const hasNarration = slides.some((slide) => slide.audioUrl);
   const totalDuration = slides.reduce((sum, slide) => sum + (slide.audioDuration || 0), 0);
-  const slidesWithAudio = slides.filter(slide => slide.audioUrl).length;
+  const slidesWithAudio = slides.filter((slide) => slide.audioUrl).length;
 
   const getFormatIcon = (format: ExportFormat) => {
     switch (format) {
-      case 'mp4': return <FileVideo className="h-5 w-5" />;
-      case 'pptx': return <FileText className="h-5 w-5" />;
-      case 'audio': return <FileAudio className="h-5 w-5" />;
-      case 'subtitles': return <FileText className="h-5 w-5" />;
-      default: return <Download className="h-5 w-5" />;
+      case "mp4":
+        return <FileVideo className="h-5 w-5" />;
+      case "pptx":
+        return <FileText className="h-5 w-5" />;
+      case "audio":
+        return <FileAudio className="h-5 w-5" />;
+      case "subtitles":
+        return <FileText className="h-5 w-5" />;
+      default:
+        return <Download className="h-5 w-5" />;
     }
   };
 
   const getFormatLabel = (format: ExportFormat) => {
     switch (format) {
-      case 'mp4': return 'MP4 Video';
-      case 'pptx': return 'PowerPoint with Audio';
-      case 'audio': return 'Audio Only';
-      case 'subtitles': return 'Subtitles';
-      default: return format.toUpperCase();
+      case "mp4":
+        return "MP4 Video";
+      case "pptx":
+        return "PowerPoint with Audio";
+      case "audio":
+        return "Audio Only";
+      case "subtitles":
+        return "Subtitles";
+      default:
+        return format.toUpperCase();
     }
   };
 
   return (
     <div className="space-y-6">
       {/* Status Messages */}
-      {exportStatus.type !== 'idle' && (
-        <Alert variant={exportStatus.type === 'error' ? 'destructive' : 'default'}>
-          {exportStatus.type === 'preparing' && <Loader2 className="h-4 w-4 animate-spin" />}
-          {exportStatus.type === 'completed' && <CheckCircle className="h-4 w-4" />}
-          {exportStatus.type === 'error' && <AlertCircle className="h-4 w-4" />}
+      {exportStatus.type !== "idle" && (
+        <Alert variant={exportStatus.type === "error" ? "destructive" : "default"}>
+          {exportStatus.type === "preparing" && <Loader2 className="h-4 w-4 animate-spin" />}
+          {exportStatus.type === "completed" && <CheckCircle className="h-4 w-4" />}
+          {exportStatus.type === "error" && <AlertCircle className="h-4 w-4" />}
           <AlertDescription className="flex items-center justify-between">
             <span>{exportStatus.message}</span>
-            {exportStatus.type !== 'preparing' && (
+            {exportStatus.type !== "preparing" && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setExportStatus({ type: 'idle', message: '' })}
+                onClick={() => setExportStatus({ type: "idle", message: "" })}
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -345,28 +356,28 @@ export function IntegratedExportPanel({
             <Volume2 className="h-5 w-5" />
             Narration Summary
           </CardTitle>
-          <CardDescription>
-            Overview of generated narration and export options
-          </CardDescription>
+          <CardDescription>Overview of generated narration and export options</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="text-2xl font-bold">{slidesWithAudio}/{slides.length}</div>
+              <div className="text-2xl font-bold">
+                {slidesWithAudio}/{slides.length}
+              </div>
               <div className="text-sm text-muted-foreground">Slides with Audio</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold">
-                {Math.floor(totalDuration / 60)}:{(totalDuration % 60).toFixed(0).padStart(2, '0')}
+                {Math.floor(totalDuration / 60)}:{(totalDuration % 60).toFixed(0).padStart(2, "0")}
               </div>
               <div className="text-sm text-muted-foreground">Total Duration</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold">{voiceSettings?.voice || 'N/A'}</div>
+              <div className="text-2xl font-bold">{voiceSettings?.voice || "N/A"}</div>
               <div className="text-sm text-muted-foreground">Voice</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold">{voiceSettings?.language || 'N/A'}</div>
+              <div className="text-2xl font-bold">{voiceSettings?.language || "N/A"}</div>
               <div className="text-sm text-muted-foreground">Language</div>
             </div>
           </div>
@@ -380,20 +391,18 @@ export function IntegratedExportPanel({
             <Download className="h-5 w-5" />
             Export Options
           </CardTitle>
-          <CardDescription>
-            Choose your preferred export format and settings
-          </CardDescription>
+          <CardDescription>Choose your preferred export format and settings</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Format Selection */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {(['mp4', 'pptx', 'audio', 'subtitles'] as ExportFormat[]).map((format) => (
+            {(["mp4", "pptx", "audio", "subtitles"] as ExportFormat[]).map((format) => (
               <div
                 key={format}
                 className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                  selectedFormat === format 
-                    ? 'border-primary bg-primary/10' 
-                    : 'border-border hover:bg-muted/50'
+                  selectedFormat === format
+                    ? "border-primary bg-primary/10"
+                    : "border-border hover:bg-muted/50"
                 }`}
                 onClick={() => setSelectedFormat(format)}
               >
@@ -419,7 +428,7 @@ export function IntegratedExportPanel({
                 Include subtitles/captions
               </label>
             </div>
-            
+
             <div className="flex items-center space-x-2">
               <input
                 type="checkbox"
@@ -475,14 +484,15 @@ export function IntegratedExportPanel({
               <Settings className="h-5 w-5" />
               Export Jobs
             </CardTitle>
-            <CardDescription>
-              Track your export progress
-            </CardDescription>
+            <CardDescription>Track your export progress</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {exportJobs.map((job) => (
-                <div key={job.id} className="flex items-center justify-between p-4 border rounded-lg">
+                <div
+                  key={job.id}
+                  className="flex items-center justify-between p-4 border rounded-lg"
+                >
                   <div className="flex items-center gap-3">
                     {getFormatIcon(job.format)}
                     <div>
@@ -492,28 +502,30 @@ export function IntegratedExportPanel({
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
-                    <Badge variant={
-                      job.status === 'completed' ? 'default' :
-                      job.status === 'error' ? 'destructive' :
-                      job.status === 'processing' ? 'secondary' : 'outline'
-                    }>
+                    <Badge
+                      variant={
+                        job.status === "completed"
+                          ? "default"
+                          : job.status === "error"
+                            ? "destructive"
+                            : job.status === "processing"
+                              ? "secondary"
+                              : "outline"
+                      }
+                    >
                       {job.status}
                     </Badge>
-                    
-                    {job.status === 'processing' && (
+
+                    {job.status === "processing" && (
                       <div className="w-24">
                         <Progress value={job.progress} className="h-2" />
                       </div>
                     )}
-                    
-                    {job.status === 'completed' && job.downloadUrl && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDownload(job)}
-                      >
+
+                    {job.status === "completed" && job.downloadUrl && (
+                      <Button variant="outline" size="sm" onClick={() => handleDownload(job)}>
                         <Download className="h-4 w-4" />
                       </Button>
                     )}
@@ -533,14 +545,15 @@ export function IntegratedExportPanel({
               <FileAudio className="h-5 w-5" />
               Available Downloads
             </CardTitle>
-            <CardDescription>
-              Download previously generated exports
-            </CardDescription>
+            <CardDescription>Download previously generated exports</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               {availableExports.map((exportInfo, index) => (
-                <div key={`export-${exportInfo.format}-${index}`} className="flex items-center justify-between p-3 border rounded-lg">
+                <div
+                  key={`export-${exportInfo.format}-${index}`}
+                  className="flex items-center justify-between p-3 border rounded-lg"
+                >
                   <div className="flex items-center gap-3">
                     <FileAudio className="h-5 w-5" />
                     <div>
@@ -552,7 +565,7 @@ export function IntegratedExportPanel({
                       )}
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     {exportInfo.downloadUrl && (
                       <Button
@@ -584,13 +597,15 @@ export function IntegratedExportPanel({
             <div className="flex items-start gap-2">
               <FileVideo className="h-4 w-4 mt-0.5 text-muted-foreground" />
               <div>
-                <strong>MP4 Video:</strong> Creates a video file with synchronized narration and slide transitions
+                <strong>MP4 Video:</strong> Creates a video file with synchronized narration and
+                slide transitions
               </div>
             </div>
             <div className="flex items-start gap-2">
               <FileText className="h-4 w-4 mt-0.5 text-muted-foreground" />
               <div>
-                <strong>PowerPoint:</strong> Generates an enhanced PowerPoint file with embedded audio and optional subtitles
+                <strong>PowerPoint:</strong> Generates an enhanced PowerPoint file with embedded
+                audio and optional subtitles
               </div>
             </div>
             <div className="flex items-start gap-2">

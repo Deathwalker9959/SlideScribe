@@ -12,6 +12,7 @@ from services.ai_refinement import app as ai_refinement_module
 from services.analytics.app import app as analytics_app
 from services.audio_processing.app import app as audio_processing_app
 from services.auth import router as auth_router
+from services.auth_service import router as auth_service_router
 from services.image_analysis import app as image_analysis_module
 from services.narration import app as narration_module
 from services.ssml_builder import app as ssml_builder_module
@@ -100,6 +101,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router, tags=["Authentication"])
+app.include_router(auth_service_router, prefix="/api/v1/auth", tags=["Authentication"])
 
 # Routes to exclude (internal FastAPI docs routes)
 EXCLUDED_PATHS = {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}

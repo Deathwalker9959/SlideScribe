@@ -61,7 +61,7 @@ export interface VoiceProfile {
 // Narration Job Types
 export interface NarrationJob {
   job_id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  status: "pending" | "processing" | "completed" | "failed" | "cancelled";
   progress: number;
   current_slide: number;
   total_slides: number;
@@ -149,69 +149,149 @@ export class SlideScribeApiClient {
     // Determine base URL from environment or fallback
     this.baseUrl = this.resolveBaseUrl();
     this.wsUrl = this.resolveWsUrl();
-    
+
     // Load auth token from storage
     this.loadAuthToken();
   }
 
+  // Enhanced authentication methods
+  async getAuthConfig(): Promise<any> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/auth/config`);
+      if (response.ok) {
+        return response.json();
+      }
+    } catch (error) {
+      console.warn("Auth config endpoint not available, using defaults");
+    }
+    // Fallback to default configuration
+    return {
+      auth_driver: "database",
+      requires_auth: true,
+      supports_registration: true,
+      session_expire_minutes: 1440,
+      anonymous_session_expire_minutes: 480,
+    };
+  }
+
+  async register(registerData: {
+    username: string;
+    email: string;
+    password: string;
+    full_name?: string;
+  }): Promise<LoginResponse> {
+    try {
+      const response = await this.request("/api/v1/auth/register", {
+        method: "POST",
+        body: JSON.stringify(registerData),
+      });
+      return response;
+    } catch (error) {
+      // Fallback: try logging in with the credentials (for testing)
+      return this.login({ username: registerData.username, password: registerData.password });
+    }
+  }
+
+  async createAnonymousSession(): Promise<any> {
+    // Clear any existing auth token when creating anonymous session
+    this.clearAuthToken();
+
+    try {
+      const response = await this.request("/api/v1/auth/anonymous-session", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      return response;
+    } catch (error) {
+      // Fallback: create a mock anonymous session
+      const sessionId = `anon_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      return {
+        session_id: sessionId,
+        auth_driver: "none",
+        expires_in: 480 * 60, // 8 hours
+      };
+    }
+  }
+
+  async logoutWithSession(): Promise<void> {
+    // For anonymous sessions, we don't need to call the logout endpoint
+    // Just clear local state
+    this.clearAuthToken();
+    this.disconnectWebSocket();
+  }
+
+  async logout(): Promise<void> {
+    // For authenticated sessions, call the logout endpoint
+    if (this.authToken) {
+      try {
+        await this.request("/api/v1/auth/logout", {
+          method: "POST",
+        });
+      } catch (error) {
+        // Log error but don't fail the logout process
+        console.warn("Logout API call failed:", error);
+      }
+    }
+    this.clearAuthToken();
+    this.disconnectWebSocket();
+  }
+
   private resolveBaseUrl(): string {
     // Check for global overrides first
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       if (window.__SLIDESCRIBE_BACKEND_URL__) {
         return window.__SLIDESCRIBE_BACKEND_URL__;
       }
-      
-      // Fallback to current origin or localhost
+
+      // Fallback to current origin for production
       const origin = window.location.origin;
-      if (origin && !origin.includes('localhost')) {
+      if (origin && !origin.includes("localhost")) {
         return origin;
       }
     }
-    
-    return 'http://localhost:8000';
+
+    // Default fallback for development
+    return "http://localhost:8000";
   }
 
   private resolveWsUrl(): string {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       if (window.__SLIDESCRIBE_PROGRESS_WS__) {
         return window.__SLIDESCRIBE_PROGRESS_WS__;
       }
-      
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host || 'localhost:8000';
+
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const host = window.location.host || "localhost:8000";
       return `${protocol}//${host}/ws/progress`;
     }
-    
-    return 'ws://localhost:8000/ws/progress';
+
+    return "ws://localhost:8000/ws/progress";
   }
 
   private loadAuthToken(): void {
-    if (typeof window !== 'undefined') {
-      this.authToken = window.localStorage.getItem('slidescribe_auth_token');
+    if (typeof window !== "undefined") {
+      this.authToken = window.localStorage.getItem("slidescribe_auth_token");
     }
   }
 
   private saveAuthToken(token: string): void {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('slidescribe_auth_token', token);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("slidescribe_auth_token", token);
       this.authToken = token;
     }
   }
 
   private clearAuthToken(): void {
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem('slidescribe_auth_token');
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("slidescribe_auth_token");
       this.authToken = null;
     }
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers: HeadersInit = {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...options.headers,
     };
 
@@ -242,21 +322,21 @@ export class SlideScribeApiClient {
   // Authentication Methods
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     const formData = new FormData();
-    formData.append('username', credentials.username);
-    formData.append('password', credentials.password);
+    formData.append("username", credentials.username);
+    formData.append("password", credentials.password);
 
     const response = await fetch(`${this.baseUrl}/token`, {
-      method: 'POST',
+      method: "POST",
       body: formData,
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Login failed');
+      throw new Error(error.detail || "Login failed");
     }
 
     const data = await response.json();
-    
+
     if (data.access_token) {
       this.saveAuthToken(data.access_token);
     }
@@ -272,19 +352,9 @@ export class SlideScribeApiClient {
     };
   }
 
-  async logout(): Promise<void> {
-    try {
-      // Backend doesn't have a logout endpoint, just clear token
-      this.clearAuthToken();
-      this.disconnectWebSocket();
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  }
-
   async getCurrentUser(): Promise<any> {
     if (!this.authToken) {
-      throw new Error('Not authenticated');
+      throw new Error("Not authenticated");
     }
 
     const response = await fetch(`${this.baseUrl}/users/me`, {
@@ -294,7 +364,7 @@ export class SlideScribeApiClient {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to get current user');
+      throw new Error("Failed to get current user");
     }
 
     return response.json();
@@ -308,46 +378,51 @@ export class SlideScribeApiClient {
 
   // Voice Settings Methods
   async getAvailableVoices(provider?: string): Promise<ApiResponse<any[]>> {
-    const params = provider ? `?provider=${provider}` : '';
+    const params = provider ? `?provider=${provider}` : "";
     return this.request(`/api/v1/tts/voices${params}`);
   }
 
   async getVoiceProfiles(): Promise<ApiResponse<VoiceProfile[]>> {
-    return this.request('/api/v1/voice-profiles');
+    return this.request("/api/v1/voice-profiles");
   }
 
-  async createVoiceProfile(profile: Omit<VoiceProfile, 'id' | 'created_at' | 'updated_at'>): Promise<ApiResponse<VoiceProfile>> {
-    return this.request('/api/v1/voice-profiles', {
-      method: 'POST',
+  async createVoiceProfile(
+    profile: Omit<VoiceProfile, "id" | "created_at" | "updated_at">
+  ): Promise<ApiResponse<VoiceProfile>> {
+    return this.request("/api/v1/voice-profiles", {
+      method: "POST",
       body: JSON.stringify(profile),
     });
   }
 
-  async updateVoiceProfile(id: string, profile: Partial<VoiceProfile>): Promise<ApiResponse<VoiceProfile>> {
+  async updateVoiceProfile(
+    id: string,
+    profile: Partial<VoiceProfile>
+  ): Promise<ApiResponse<VoiceProfile>> {
     return this.request(`/api/v1/voice-profiles/${id}`, {
-      method: 'PUT',
+      method: "PUT",
       body: JSON.stringify(profile),
     });
   }
 
   async deleteVoiceProfile(id: string): Promise<ApiResponse<void>> {
     return this.request(`/api/v1/voice-profiles/${id}`, {
-      method: 'DELETE',
+      method: "DELETE",
     });
   }
 
   // TTS Methods
   async synthesizeSpeech(request: TtsRequest): Promise<ApiResponse<TtsResponse>> {
-    return this.request('/api/v1/tts/synthesize', {
-      method: 'POST',
+    return this.request("/api/v1/tts/synthesize", {
+      method: "POST",
       body: JSON.stringify(request),
     });
   }
 
   // Narration Methods
   async createNarrationJob(request: NarrationRequest): Promise<ApiResponse<{ job_id: string }>> {
-    return this.request('/api/v1/narration/process-presentation', {
-      method: 'POST',
+    return this.request("/api/v1/narration/process-presentation", {
+      method: "POST",
       body: JSON.stringify(request),
     });
   }
@@ -362,21 +437,34 @@ export class SlideScribeApiClient {
 
   async cancelNarrationJob(jobId: string): Promise<ApiResponse<void>> {
     return this.request(`/api/v1/narration/job/${jobId}/cancel`, {
-      method: 'POST',
+      method: "POST",
     });
   }
 
-  async processSlide(slideData: SlideData & { presentation_id?: string; presentation_title?: string; slide_number?: number; total_slides?: number; topic_keywords?: string[] }): Promise<ApiResponse<any>> {
-    return this.request('/api/v1/narration/process-slide', {
-      method: 'POST',
+  async processSlide(
+    slideData: SlideData & {
+      presentation_id?: string;
+      presentation_title?: string;
+      slide_number?: number;
+      total_slides?: number;
+      topic_keywords?: string[];
+    }
+  ): Promise<ApiResponse<any>> {
+    return this.request("/api/v1/narration/process-slide", {
+      method: "POST",
       body: JSON.stringify(slideData),
     });
   }
 
   // AI Refinement Methods
-  async refineText(text: string, refinementType: string, language?: string, tone?: string): Promise<ApiResponse<{ refined_text: string }>> {
-    return this.request('/api/v1/ai-refinement/refine', {
-      method: 'POST',
+  async refineText(
+    text: string,
+    refinementType: string,
+    language?: string,
+    tone?: string
+  ): Promise<ApiResponse<{ refined_text: string }>> {
+    return this.request("/api/v1/ai-refinement/refine", {
+      method: "POST",
       body: JSON.stringify({
         text,
         refinement_type: refinementType,
@@ -388,13 +476,13 @@ export class SlideScribeApiClient {
 
   // Subtitle Methods
   async generateSubtitles(jobId: string, format?: string): Promise<ApiResponse<any>> {
-    const params = format ? `?format=${format}` : '';
+    const params = format ? `?format=${format}` : "";
     return this.request(`/api/v1/subtitles/generate/${jobId}${params}`);
   }
 
   async validateSubtitles(subtitleData: any): Promise<ApiResponse<any>> {
-    return this.request('/api/v1/subtitles/validate', {
-      method: 'POST',
+    return this.request("/api/v1/subtitles/validate", {
+      method: "POST",
       body: JSON.stringify(subtitleData),
     });
   }
@@ -402,7 +490,7 @@ export class SlideScribeApiClient {
   // Export Methods
   async exportAudio(jobId: string, format: string, options?: any): Promise<ApiResponse<any>> {
     return this.request(`/api/v1/audio/export/${jobId}`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({
         format,
         ...options,
@@ -415,17 +503,22 @@ export class SlideScribeApiClient {
   }
 
   // Image Analysis Methods
-  async analyzeImage(imageData: { image_id: string; description: string; mime_type: string; content_base64?: string }): Promise<ApiResponse<any>> {
-    return this.request('/api/v1/image-analysis/analyze', {
-      method: 'POST',
+  async analyzeImage(imageData: {
+    image_id: string;
+    description: string;
+    mime_type: string;
+    content_base64?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.request("/api/v1/image-analysis/analyze", {
+      method: "POST",
       body: JSON.stringify(imageData),
     });
   }
 
   // Analytics Methods
   async trackEvent(event: string, data?: any): Promise<ApiResponse<void>> {
-    return this.request('/api/v1/analytics/track', {
-      method: 'POST',
+    return this.request("/api/v1/analytics/track", {
+      method: "POST",
       body: JSON.stringify({
         event,
         data,
@@ -435,12 +528,17 @@ export class SlideScribeApiClient {
   }
 
   async getAnalytics(filters?: any): Promise<ApiResponse<any>> {
-    const params = filters ? `?${new URLSearchParams(filters).toString()}` : '';
+    const params = filters ? `?${new URLSearchParams(filters).toString()}` : "";
     return this.request(`/api/v1/analytics${params}`);
   }
 
   // WebSocket Methods
-  connectWebSocket(clientId: string, onMessage: (message: ProgressUpdate) => void, onError?: (error: Event) => void, onClose?: (event: CloseEvent) => void): void {
+  connectWebSocket(
+    clientId: string,
+    onMessage: (message: ProgressUpdate) => void,
+    onError?: (error: Event) => void,
+    onClose?: (event: CloseEvent) => void
+  ): void {
     if (this.wsConnection?.readyState === WebSocket.OPEN) {
       return;
     }
@@ -449,7 +547,7 @@ export class SlideScribeApiClient {
     this.wsConnection = new WebSocket(wsUrl);
 
     this.wsConnection.onopen = () => {
-      console.log('WebSocket connected');
+      console.log("WebSocket connected");
       this.wsReconnectAttempts = 0;
     };
 
@@ -458,18 +556,18 @@ export class SlideScribeApiClient {
         const message = JSON.parse(event.data);
         onMessage(message);
       } catch (error) {
-        console.error('Failed to parse WebSocket message:', error);
+        console.error("Failed to parse WebSocket message:", error);
       }
     };
 
     this.wsConnection.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      console.error("WebSocket error:", error);
       onError?.(error);
       this.attemptReconnect(clientId, onMessage, onError, onClose);
     };
 
     this.wsConnection.onclose = (event) => {
-      console.log('WebSocket closed:', event);
+      console.log("WebSocket closed:", event);
       onClose?.(event);
       if (!event.wasClean) {
         this.attemptReconnect(clientId, onMessage, onError, onClose);
@@ -477,9 +575,14 @@ export class SlideScribeApiClient {
     };
   }
 
-  private attemptReconnect(clientId: string, onMessage: (message: ProgressUpdate) => void, onError?: (error: Event) => void, onClose?: (event: CloseEvent) => void): void {
+  private attemptReconnect(
+    clientId: string,
+    onMessage: (message: ProgressUpdate) => void,
+    onError?: (error: Event) => void,
+    onClose?: (event: CloseEvent) => void
+  ): void {
     if (this.wsReconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('Max reconnection attempts reached');
+      console.error("Max reconnection attempts reached");
       return;
     }
 
@@ -487,7 +590,9 @@ export class SlideScribeApiClient {
     const delay = this.reconnectDelay * Math.pow(2, this.wsReconnectAttempts - 1);
 
     setTimeout(() => {
-      console.log(`Attempting to reconnect (${this.wsReconnectAttempts}/${this.maxReconnectAttempts})`);
+      console.log(
+        `Attempting to reconnect (${this.wsReconnectAttempts}/${this.maxReconnectAttempts})`
+      );
       this.connectWebSocket(clientId, onMessage, onError, onClose);
     }, delay);
   }
@@ -502,25 +607,29 @@ export class SlideScribeApiClient {
 
   subscribeToJob(jobId: string): void {
     if (this.wsConnection?.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(JSON.stringify({
-        action: 'subscribe',
-        job_id: jobId
-      }));
+      this.wsConnection.send(
+        JSON.stringify({
+          action: "subscribe",
+          job_id: jobId,
+        })
+      );
     }
   }
 
   unsubscribeFromJob(jobId: string): void {
     if (this.wsConnection?.readyState === WebSocket.OPEN) {
-      this.wsConnection.send(JSON.stringify({
-        action: 'unsubscribe',
-        job_id: jobId
-      }));
+      this.wsConnection.send(
+        JSON.stringify({
+          action: "unsubscribe",
+          job_id: jobId,
+        })
+      );
     }
   }
 
   // Utility Methods
   getHealthStatus(): Promise<ApiResponse<any>> {
-    return this.request('/health');
+    return this.request("/health");
   }
 
   getServiceHealth(service: string): Promise<ApiResponse<any>> {

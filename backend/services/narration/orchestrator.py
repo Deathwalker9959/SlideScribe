@@ -1,6 +1,7 @@
 """Narration orchestrator for managing the complete presentation processing pipeline."""
 
 import asyncio
+import json
 import shutil
 import time
 import wave
@@ -91,6 +92,7 @@ class NarrationOrchestrator:
 
         # Initialize queue manager for background processing
         self.queue_manager = QueueManager()
+        logger.info("Queue manager initialized")
 
         # Cache for storing job status and progress
         self.cache = Cache()
@@ -211,18 +213,20 @@ class NarrationOrchestrator:
             "current_slide": 0,
             "progress": 0.0,
             "started_at": datetime.now(UTC).isoformat(),
-            "request": request.model_dump(),
+            "request": self._serialize_metadata(request.model_dump()),
         }
 
         # Store job in cache
         self.cache.set(f"job:{job_id}", job_data, ttl=3600)
 
         # Enqueue job for background processing
-        await self.queue_manager.enqueue("narration_jobs", {
+        import json
+        job_payload = {
             "job_id": job_id,
             "action": "process_presentation",
             "data": job_data,
-        })
+        }
+        self.queue_manager.enqueue("narration_jobs", json.dumps(job_payload))
 
         # Start background processing task
         asyncio.create_task(self._process_presentation_background(job_id, request))
@@ -282,14 +286,14 @@ class NarrationOrchestrator:
                 "slide_id": slide.slide_id,
                 "original_content": slide.content,
                 "refined_content": refined_content,
-                "audio_result": audio_result,
+                "audio_result": audio_result.model_dump() if audio_result else None,
                 "audio_file_path": audio_file_path,
-                "subtitles": subtitles,
+                "subtitles": [subtitle.model_dump() for subtitle in subtitles] if subtitles else [],
                 "processing_time": processing_time,
                 "status": "completed",
             }
             if contextual_metadata:
-                result["contextual_metadata"] = contextual_metadata
+                result["contextual_metadata"] = self._serialize_metadata(contextual_metadata)
 
             return result
 
@@ -332,8 +336,11 @@ class NarrationOrchestrator:
             audio_segments: list[AudioSegmentModel] = []
             for slide_result in processed_slides:
                 audio_path = slide_result.get("audio_file_path")
-                audio_meta = slide_result.get("audio_result") or {}
-                duration = audio_meta.get("duration") or slide_result.get("processing_time") or 5.0
+                audio_result_data = slide_result.get("audio_result")
+                if audio_result_data and isinstance(audio_result_data, dict):
+                    duration = audio_result_data.get("duration", slide_result.get("processing_time", 5.0))
+                else:
+                    duration = slide_result.get("processing_time") or 5.0
                 if audio_path:
                     audio_segments.append(
                         AudioSegmentModel(
@@ -1041,6 +1048,25 @@ class NarrationOrchestrator:
             job_data["progress"] = progress_data
 
         return job_data
+
+    @staticmethod
+    def _serialize_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+        """Serialize metadata to ensure JSON compatibility."""
+        def serialize_value(value: Any) -> Any:
+            if isinstance(value, datetime):
+                return value.isoformat()
+            elif isinstance(value, dict):
+                return {k: serialize_value(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [serialize_value(item) for item in value]
+            elif hasattr(value, 'model_dump'):  # Pydantic model
+                return value.model_dump()
+            elif hasattr(value, '__dict__'):  # Other objects
+                return str(value)  # Convert to string as fallback
+            else:
+                return value
+
+        return {k: serialize_value(v) for k, v in metadata.items()}
 
     async def cancel_job(self, job_id: str) -> bool:
         """Cancel a processing job."""

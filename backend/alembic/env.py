@@ -15,7 +15,7 @@ from database import Base
 config = context.config
 
 # Override sqlalchemy.url from environment variable if available
-database_url = os.getenv("DATABASE_URL", "sqlite:///./slidescribe.db")
+database_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/pptx_tts")
 if database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 config.set_main_option("sqlalchemy.url", database_url)

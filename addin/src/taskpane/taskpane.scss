@@ -1,5 +1,7 @@
 @use './styles/_base' as *;
 @use './styles/_ui' as *;
+@use './styles/_tabs' as *;
+@use './styles/_auth-panel' as *;
 @use './styles/_narration-assistant' as *;
 @use './styles/_debug-panel' as *;
 @use './styles/_progress-panel' as *;

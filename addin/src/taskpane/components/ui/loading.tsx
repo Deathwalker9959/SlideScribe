@@ -1,25 +1,23 @@
-import React from 'react';
-import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import React from "react";
+import { Loader2, AlertCircle, CheckCircle } from "lucide-react";
 
 interface LoadingSpinnerProps {
-  size?: 'sm' | 'md' | 'lg';
+  size?: "sm" | "md" | "lg";
   message?: string;
   className?: string;
 }
 
-export function LoadingSpinner({ size = 'md', message, className = '' }: LoadingSpinnerProps) {
+export function LoadingSpinner({ size = "md", message, className = "" }: LoadingSpinnerProps) {
   const sizeClasses = {
-    sm: 'w-4 h-4',
-    md: 'w-6 h-6',
-    lg: 'w-8 h-8',
+    sm: "w-4 h-4",
+    md: "w-6 h-6",
+    lg: "w-8 h-8",
   };
 
   return (
     <div className={`flex flex-col items-center justify-center gap-2 ${className}`}>
       <Loader2 className={`${sizeClasses[size]} animate-spin text-blue-500`} />
-      {message && (
-        <p className="text-sm text-gray-600 text-center">{message}</p>
-      )}
+      {message && <p className="text-sm text-gray-600 text-center">{message}</p>}
     </div>
   );
 }
@@ -54,7 +52,7 @@ export function ProgressIndicator({
   progress,
   message,
   showPercentage = true,
-  className = ''
+  className = "",
 }: ProgressIndicatorProps) {
   const clampedProgress = Math.min(100, Math.max(0, progress));
 
@@ -81,42 +79,42 @@ export function ProgressIndicator({
 }
 
 interface StatusBadgeProps {
-  status: 'success' | 'error' | 'warning' | 'info' | 'loading';
+  status: "success" | "error" | "warning" | "info" | "loading";
   message: string;
   className?: string;
 }
 
-export function StatusBadge({ status, message, className = '' }: StatusBadgeProps) {
+export function StatusBadge({ status, message, className = "" }: StatusBadgeProps) {
   const statusConfig = {
     success: {
-      bgColor: 'bg-green-100',
-      textColor: 'text-green-800',
+      bgColor: "bg-green-100",
+      textColor: "text-green-800",
       icon: CheckCircle,
-      iconColor: 'text-green-600',
+      iconColor: "text-green-600",
     },
     error: {
-      bgColor: 'bg-red-100',
-      textColor: 'text-red-800',
+      bgColor: "bg-red-100",
+      textColor: "text-red-800",
       icon: AlertCircle,
-      iconColor: 'text-red-600',
+      iconColor: "text-red-600",
     },
     warning: {
-      bgColor: 'bg-yellow-100',
-      textColor: 'text-yellow-800',
+      bgColor: "bg-yellow-100",
+      textColor: "text-yellow-800",
       icon: AlertCircle,
-      iconColor: 'text-yellow-600',
+      iconColor: "text-yellow-600",
     },
     info: {
-      bgColor: 'bg-blue-100',
-      textColor: 'text-blue-800',
+      bgColor: "bg-blue-100",
+      textColor: "text-blue-800",
       icon: AlertCircle,
-      iconColor: 'text-blue-600',
+      iconColor: "text-blue-600",
     },
     loading: {
-      bgColor: 'bg-gray-100',
-      textColor: 'text-gray-800',
+      bgColor: "bg-gray-100",
+      textColor: "text-gray-800",
       icon: Loader2,
-      iconColor: 'text-gray-600',
+      iconColor: "text-gray-600",
     },
   };
 
@@ -124,8 +122,12 @@ export function StatusBadge({ status, message, className = '' }: StatusBadgeProp
   const Icon = config.icon;
 
   return (
-    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${config.bgColor} ${config.textColor} ${className}`}>
-      <Icon className={`w-4 h-4 ${status === 'loading' ? 'animate-spin' : ''} ${config.iconColor}`} />
+    <div
+      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${config.bgColor} ${config.textColor} ${className}`}
+    >
+      <Icon
+        className={`w-4 h-4 ${status === "loading" ? "animate-spin" : ""} ${config.iconColor}`}
+      />
       <span className="text-sm font-medium">{message}</span>
     </div>
   );
@@ -136,7 +138,7 @@ interface SkeletonProps {
   children?: React.ReactNode;
 }
 
-export function Skeleton({ className = '', children }: SkeletonProps) {
+export function Skeleton({ className = "", children }: SkeletonProps) {
   return (
     <div className={`animate-pulse ${className}`}>
       <div className="bg-gray-200 rounded h-4 w-full"></div>
@@ -156,16 +158,12 @@ export function CardSkeleton({
   title = true,
   subtitle = false,
   lines = 3,
-  className = ''
+  className = "",
 }: CardSkeletonProps) {
   return (
     <div className={`p-4 border rounded-lg ${className}`}>
-      {title && (
-        <div className="h-6 bg-gray-200 rounded mb-2 w-3/4"></div>
-      )}
-      {subtitle && (
-        <div className="h-4 bg-gray-200 rounded mb-4 w-1/2"></div>
-      )}
+      {title && <div className="h-6 bg-gray-200 rounded mb-2 w-3/4"></div>}
+      {subtitle && <div className="h-4 bg-gray-200 rounded mb-4 w-1/2"></div>}
       {Array.from({ length: lines }).map((_, i) => (
         <div key={i} className="h-4 bg-gray-200 rounded mb-2 w-full"></div>
       ))}
@@ -181,24 +179,12 @@ interface EmptyStateProps {
   className?: string;
 }
 
-export function EmptyState({
-  icon,
-  title,
-  description,
-  action,
-  className = ''
-}: EmptyStateProps) {
+export function EmptyState({ icon, title, description, action, className = "" }: EmptyStateProps) {
   return (
     <div className={`flex flex-col items-center justify-center p-8 text-center ${className}`}>
-      {icon && (
-        <div className="mb-4 text-gray-400">
-          {icon}
-        </div>
-      )}
+      {icon && <div className="mb-4 text-gray-400">{icon}</div>}
       <h3 className="text-lg font-medium text-gray-900 mb-2">{title}</h3>
-      {description && (
-        <p className="text-gray-600 mb-4 max-w-md">{description}</p>
-      )}
+      {description && <p className="text-gray-600 mb-4 max-w-md">{description}</p>}
       {action}
     </div>
   );

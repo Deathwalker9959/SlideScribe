@@ -1,233 +1,47 @@
-version: '3.8'
-
 services:
-  # AI Text Refinement Service
-  ai-refinement:
-    build: ./services/ai-refinement
-    ports:
-      - "8001:8000"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - AZURE_OPENAI_KEY=${AZURE_OPENAI_KEY}
-      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-    volumes:
-      - ./shared:/app/shared
-      - ../.env:/app/.env
-    networks:
-      - pptx-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Azure TTS Service
-  tts-service:
-    build: ./services/tts-service
-    ports:
-      - "8002:8000"
-    environment:
-      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY}
-      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION}
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - DEFAULT_VOICE=${DEFAULT_VOICE}
-      - DEFAULT_SPEED=${DEFAULT_SPEED}
-      - DEFAULT_PITCH=${DEFAULT_PITCH}
-    volumes:
-      - ./shared:/app/shared
-      - ./media:/app/media
-      - ../.env:/app/.env
-    networks:
-      - pptx-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Subtitle Service
-  subtitle-service:
-    build: ./services/subtitle-service
-    ports:
-      - "8003:8000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-    volumes:
-      - ./shared:/app/shared
-      - ./media:/app/media
-      - ../.env:/app/.env
-    networks:
-      - pptx-network
-    restart: unless-stopped
-
-  # Subtitle Service
-  subtitle-service:
-    build: ./services/subtitle-service
-    ports:
-      - "8003:8000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - SUBTITLE_DEFAULT_LANGUAGE=${SUBTITLE_DEFAULT_LANGUAGE}
-      - SUBTITLE_MAX_CHARS_PER_LINE=${SUBTITLE_MAX_CHARS_PER_LINE}
-      - SUBTITLE_MAX_LINES=${SUBTITLE_MAX_LINES}
-    volumes:
-      - ./shared:/app/shared
-      - ./media:/app/media
-      - ../.env:/app/.env
-    networks:
-      - pptx-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Analytics Service
-  analytics-service:
-    build: ./services/analytics
-    ports:
-      - "8005:8000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - ANALYTICS_ENABLED=${ANALYTICS_ENABLED}
-      - ANALYTICS_EXPORT_TTL_HOURS=${ANALYTICS_EXPORT_TTL_HOURS}
-      - ANALYTICS_EXPORT_DIR=${ANALYTICS_EXPORT_DIR}
-      - TELEMETRY_SAMPLE_RATE=${TELEMETRY_SAMPLE_RATE}
-    volumes:
-      - ./shared:/app/shared
-      - ./analytics_exports:/app/analytics_exports
-      - ../.env:/app/.env
-    networks:
-      - pptx-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Voice Profile Service
-  voice-profile-service:
-    build: ./services/voice-profiles
-    ports:
-      - "8006:8000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - VOICE_PROFILE_STORAGE_DIR=${VOICE_PROFILE_STORAGE_DIR}
-      - VOICE_PROFILE_MAX_SIZE=${VOICE_PROFILE_MAX_SIZE}
-      - VOICE_PROFILE_CACHE_TTL=${VOICE_PROFILE_CACHE_TTL}
-    volumes:
-      - ./shared:/app/shared
-      - ./voice_profiles:/app/voice_profiles
-      - ../.env:/app/.env
-    networks:
-      - pptx-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Narration Orchestrator
-  narration-orchestrator:
-    build: ./services/narration
-    ports:
-      - "8007:8000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - AI_REFINEMENT_URL=http://ai-refinement:8000
-      - TTS_SERVICE_URL=http://tts-service:8000
-      - SUBTITLE_SERVICE_URL=http://subtitle-service:8000
-      - ANALYTICS_SERVICE_URL=http://analytics-service:8000
-      - VOICE_PROFILE_SERVICE_URL=http://voice-profile-service:8000
-      - WEBSOCKET_MAX_CONNECTIONS=${WEBSOCKET_MAX_CONNECTIONS}
-      - MAX_CONCURRENT_JOBS=${MAX_CONCURRENT_JOBS}
-      - JOB_TIMEOUT_SECONDS=${JOB_TIMEOUT_SECONDS}
-    volumes:
-      - ./shared:/app/shared
-      - ./media:/app/media
-      - ../.env:/app/.env
-    networks:
-      - pptx-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    depends_on:
-      - ai-refinement
-      - tts-service
-      - subtitle-service
-      - analytics-service
-      - voice-profile-service
-
   # Main Application (Unified API Gateway)
   app:
     build: .
     ports:
       - "8000:8000"
+    env_file:
+      - ./.env
     environment:
-      # Database and Cache
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
+      # Override for Docker-specific database URL
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/pptx_tts
+      - REDIS_URL=redis://redis:6379
+      # Default values for optional variables
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-slidescribe-super-secret-key-change-in-production}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_EXPIRE_MINUTES=${JWT_EXPIRE_MINUTES:-1440}
+      - MAX_CONCURRENT_JOBS=${MAX_CONCURRENT_JOBS:-10}
+      - JOB_TIMEOUT_SECONDS=${JOB_TIMEOUT_SECONDS:-300}
+      - ANALYTICS_ENABLED=${ANALYTICS_ENABLED:-true}
+      - TELEMETRY_SAMPLE_RATE=${TELEMETRY_SAMPLE_RATE:-0.1}
+      - WEBSOCKET_MAX_CONNECTIONS=${WEBSOCKET_MAX_CONNECTIONS:-100}
+      - WEBSOCKET_HEARTBEAT_INTERVAL=${WEBSOCKET_HEARTBEAT_INTERVAL:-30}
+      - MEDIA_ROOT=${MEDIA_ROOT:-/app/media}
+      - VOICE_PROFILE_STORAGE_DIR=${VOICE_PROFILE_STORAGE_DIR:-/app/voice_profiles}
+      - ANALYTICS_EXPORT_DIR=${ANALYTICS_EXPORT_DIR:-/app/analytics_exports}
+      - IMAGE_ANALYSIS_PROVIDER=${IMAGE_ANALYSIS_PROVIDER:-azure}
+      - USE_AZURE_OPENAI=${USE_AZURE_OPENAI:-true}
+      - USE_AZURE_OPENAI_VISION=${USE_AZURE_OPENAI_VISION:-true}
+      - DEBUG=${DEBUG:-false}
 
-      # AI Services
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - AZURE_OPENAI_KEY=${AZURE_OPENAI_KEY}
-      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
-
-      # TTS Services
-      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY}
-      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION}
-
-      # Security
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - JWT_ALGORITHM=${JWT_ALGORITHM}
-      - JWT_EXPIRE_MINUTES=${JWT_EXPIRE_MINUTES}
-
-      # Performance
-      - MAX_CONCURRENT_JOBS=${MAX_CONCURRENT_JOBS}
-      - JOB_TIMEOUT_SECONDS=${JOB_TIMEOUT_SECONDS}
-
-      # Analytics
-      - ANALYTICS_ENABLED=${ANALYTICS_ENABLED}
-      - TELEMETRY_SAMPLE_RATE=${TELEMETRY_SAMPLE_RATE}
-
-      # WebSocket
-      - WEBSOCKET_MAX_CONNECTIONS=${WEBSOCKET_MAX_CONNECTIONS}
-      - WEBSOCKET_HEARTBEAT_INTERVAL=${WEBSOCKET_HEARTBEAT_INTERVAL}
-
-      # File Storage
-      - MEDIA_ROOT=${MEDIA_ROOT}
-      - VOICE_PROFILE_STORAGE_DIR=${VOICE_PROFILE_STORAGE_DIR}
-      - ANALYTICS_EXPORT_DIR=${ANALYTICS_EXPORT_DIR}
-
-      # CORS
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
     volumes:
       - ./shared:/app/shared
       - ./media:/app/media
       - ./voice_profiles:/app/voice_profiles
       - ./analytics_exports:/app/analytics_exports
-      - ../.env:/app/.env
+      - ./.env:/app/.env
     networks:
       - pptx-network
     restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -245,11 +59,16 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ../.env:/app/.env
+      - ./.env:/app/.env
       - postgres_data:/var/lib/postgresql/data
     networks:
       - pptx-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Redis for caching
   redis:
@@ -259,6 +78,11 @@ services:
     networks:
       - pptx-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
   pptx-network:

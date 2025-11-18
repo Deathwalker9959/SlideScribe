@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { Button } from '@ui/button';
-import { Card } from '@ui/card';
-import { Badge } from '@ui/badge';
+import React, { useState, useCallback, useEffect } from "react";
+import { Button } from "@ui/button";
+import { Card } from "@ui/card";
+import { Badge } from "@ui/badge";
 import {
   Subtitles,
   Plus,
@@ -12,8 +12,8 @@ import {
   Pause,
   RotateCcw,
   Download,
-  Upload
-} from 'lucide-react';
+  Upload,
+} from "lucide-react";
 
 export interface SubtitleCue {
   id: string;
@@ -37,7 +37,7 @@ export function SubtitleEditor({
   onChange,
   totalDuration = 0,
   slideCount = 0,
-  disabled = false
+  disabled = false,
 }: SubtitleEditorProps) {
   const [cues, setCues] = useState<SubtitleCue[]>(initialCues);
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
@@ -54,42 +54,51 @@ export function SubtitleEditor({
     onChange(cues);
   }, [cues, onChange]);
 
-  const selectedCue = cues.find(cue => cue.id === selectedCueId);
+  const selectedCue = cues.find((cue) => cue.id === selectedCueId);
 
   const addCue = useCallback(() => {
     const newCue: SubtitleCue = {
       id: `cue-${Date.now()}`,
       startMs: currentTime,
       endMs: Math.min(currentTime + 3000, totalDuration || 60000),
-      text: 'New subtitle text',
-      slideNumber: Math.floor((currentTime / (totalDuration || 60000)) * slideCount) + 1
+      text: "New subtitle text",
+      slideNumber: Math.floor((currentTime / (totalDuration || 60000)) * slideCount) + 1,
     };
-    setCues(prev => [...prev, newCue].sort((a, b) => a.startMs - b.startMs));
+    setCues((prev) => [...prev, newCue].sort((a, b) => a.startMs - b.startMs));
     setSelectedCueId(newCue.id);
   }, [currentTime, totalDuration, slideCount]);
 
-  const deleteCue = useCallback((cueId: string) => {
-    setCues(prev => prev.filter(cue => cue.id !== cueId));
-    if (selectedCueId === cueId) {
-      setSelectedCueId(null);
-    }
-  }, [selectedCueId]);
+  const deleteCue = useCallback(
+    (cueId: string) => {
+      setCues((prev) => prev.filter((cue) => cue.id !== cueId));
+      if (selectedCueId === cueId) {
+        setSelectedCueId(null);
+      }
+    },
+    [selectedCueId]
+  );
 
   const updateCue = useCallback((cueId: string, updates: Partial<SubtitleCue>) => {
-    setCues(prev => prev.map(cue =>
-      cue.id === cueId ? { ...cue, ...updates } : cue
-    ).sort((a, b) => a.startMs - b.startMs));
+    setCues((prev) =>
+      prev
+        .map((cue) => (cue.id === cueId ? { ...cue, ...updates } : cue))
+        .sort((a, b) => a.startMs - b.startMs)
+    );
   }, []);
 
   const nudgeCueTiming = useCallback((cueId: string, startDelta: number, endDelta: number) => {
-    setCues(prev => prev.map(cue => {
-      if (cue.id !== cueId) return cue;
-      return {
-        ...cue,
-        startMs: Math.max(0, cue.startMs + startDelta),
-        endMs: Math.max(cue.startMs + 100, cue.endMs + endDelta)
-      };
-    }).sort((a, b) => a.startMs - b.startMs));
+    setCues((prev) =>
+      prev
+        .map((cue) => {
+          if (cue.id !== cueId) return cue;
+          return {
+            ...cue,
+            startMs: Math.max(0, cue.startMs + startDelta),
+            endMs: Math.max(cue.startMs + 100, cue.endMs + endDelta),
+          };
+        })
+        .sort((a, b) => a.startMs - b.startMs)
+    );
   }, []);
 
   const formatTime = (ms: number): string => {
@@ -97,7 +106,7 @@ export function SubtitleEditor({
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     const milliseconds = Math.floor((ms % 1000) / 10);
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}.${milliseconds.toString().padStart(2, "0")}`;
   };
 
   const validateCues = useCallback(() => {
@@ -129,7 +138,7 @@ export function SubtitleEditor({
     let fixedCues = [...cues];
 
     // Remove empty cues
-    fixedCues = fixedCues.filter(cue => cue.text.trim().length > 0);
+    fixedCues = fixedCues.filter((cue) => cue.text.trim().length > 0);
 
     // Fix timing overlaps
     for (let i = 0; i < fixedCues.length - 1; i++) {
@@ -139,42 +148,48 @@ export function SubtitleEditor({
     }
 
     // Ensure minimum duration (200ms)
-    fixedCues = fixedCues.map(cue => ({
+    fixedCues = fixedCues.map((cue) => ({
       ...cue,
-      endMs: Math.max(cue.startMs + 200, cue.endMs)
+      endMs: Math.max(cue.startMs + 200, cue.endMs),
     }));
 
     setCues(fixedCues);
   }, [cues]);
 
   const exportSRT = useCallback(() => {
-    const srtContent = cues.map((cue, index) => {
-      const startTime = formatTime(cue.startMs).replace('.', ',');
-      const endTime = formatTime(cue.endMs).replace('.', ',');
-      return `${index + 1}\\n${startTime.replace('.', ',')} --> ${endTime.replace('.', ',')}\\n${cue.text}\\n`;
-    }).join('\\n');
+    const srtContent = cues
+      .map((cue, index) => {
+        const startTime = formatTime(cue.startMs).replace(".", ",");
+        const endTime = formatTime(cue.endMs).replace(".", ",");
+        return `${index + 1}\\n${startTime.replace(".", ",")} --> ${endTime.replace(".", ",")}\\n${cue.text}\\n`;
+      })
+      .join("\\n");
 
-    const blob = new Blob([srtContent], { type: 'text/plain' });
+    const blob = new Blob([srtContent], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = 'subtitles.srt';
+    a.download = "subtitles.srt";
     a.click();
     URL.revokeObjectURL(url);
   }, [cues]);
 
   const exportVTT = useCallback(() => {
-    const vttContent = 'WEBVTT\\n\\n' + cues.map((cue) => {
-      const startTime = formatTime(cue.startMs);
-      const endTime = formatTime(cue.endMs);
-      return `${startTime} --> ${endTime}\\n${cue.text}\\n`;
-    }).join('\\n');
+    const vttContent =
+      "WEBVTT\\n\\n" +
+      cues
+        .map((cue) => {
+          const startTime = formatTime(cue.startMs);
+          const endTime = formatTime(cue.endMs);
+          return `${startTime} --> ${endTime}\\n${cue.text}\\n`;
+        })
+        .join("\\n");
 
-    const blob = new Blob([vttContent], { type: 'text/vtt' });
+    const blob = new Blob([vttContent], { type: "text/vtt" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = 'subtitles.vtt';
+    a.download = "subtitles.vtt";
     a.click();
     URL.revokeObjectURL(url);
   }, [cues]);
@@ -194,12 +209,7 @@ export function SubtitleEditor({
           </div>
 
           <div className="subtitle-editor__actions">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={addCue}
-              disabled={disabled}
-            >
+            <Button variant="outline" size="sm" onClick={addCue} disabled={disabled}>
               <Plus className="subtitle-editor__btn-icon" />
               Add Cue
             </Button>
@@ -245,9 +255,7 @@ export function SubtitleEditor({
               {validationIssues.slice(0, 5).map((issue, index) => (
                 <li key={index}>{issue}</li>
               ))}
-              {validationIssues.length > 5 && (
-                <li>...and {validationIssues.length - 5} more</li>
-              )}
+              {validationIssues.length > 5 && <li>...and {validationIssues.length - 5} more</li>}
             </ul>
           </div>
         )}
@@ -263,15 +271,16 @@ export function SubtitleEditor({
               {cues.map((cue) => (
                 <div
                   key={cue.id}
-                  className={`subtitle-editor__timeline-cue ${selectedCueId === cue.id ? 'selected' : ''}`}
+                  className={`subtitle-editor__timeline-cue ${selectedCueId === cue.id ? "selected" : ""}`}
                   style={{
                     left: `${(cue.startMs / (totalDuration || 60000)) * 100}%`,
-                    width: `${((cue.endMs - cue.startMs) / (totalDuration || 60000)) * 100}%`
+                    width: `${((cue.endMs - cue.startMs) / (totalDuration || 60000)) * 100}%`,
                   }}
                   onClick={() => setSelectedCueId(cue.id)}
                 >
                   <span className="subtitle-editor__timeline-cue-text">
-                    {cue.text.substring(0, 20)}{cue.text.length > 20 ? '...' : ''}
+                    {cue.text.substring(0, 20)}
+                    {cue.text.length > 20 ? "..." : ""}
                   </span>
                 </div>
               ))}
@@ -296,9 +305,7 @@ export function SubtitleEditor({
                 )}
               </Button>
 
-              <span className="subtitle-editor__time">
-                {formatTime(currentTime)}
-              </span>
+              <span className="subtitle-editor__time">{formatTime(currentTime)}</span>
             </div>
           </div>
 
@@ -312,7 +319,7 @@ export function SubtitleEditor({
               {cues.map((cue, index) => (
                 <div
                   key={cue.id}
-                  className={`subtitle-editor__cue-item ${selectedCueId === cue.id ? 'selected' : ''}`}
+                  className={`subtitle-editor__cue-item ${selectedCueId === cue.id ? "selected" : ""}`}
                   onClick={() => setSelectedCueId(cue.id)}
                 >
                   <div className="subtitle-editor__cue-item-header">

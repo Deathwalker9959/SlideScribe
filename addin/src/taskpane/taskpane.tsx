@@ -3,8 +3,9 @@
  * See LICENSE in the project root for license information.
  */
 
-import { createRoot } from 'react-dom/client';
-import { NarrationAssistant } from '@components/NarrationAssistant';
+import { createRoot } from "react-dom/client";
+import { NarrationAssistant } from "@components/NarrationAssistant";
+import { JobProvider, JobErrorBoundary } from "@state/jobManager";
 
 /* global document, Office */
 
@@ -18,20 +19,26 @@ Office.onReady((info) => {
     if (appBody) {
       appBody.style.display = "block";
     }
-    
+
     // Mount React component
     const reactRoot = document.getElementById("react-root");
     const fallbackContent = document.getElementById("fallback-content");
-    
+
     try {
       if (reactRoot) {
         // Hide fallback content
         if (fallbackContent) {
           fallbackContent.style.display = "none";
         }
-        
+
         const root = createRoot(reactRoot);
-        root.render(<NarrationAssistant />);
+        root.render(
+          <JobErrorBoundary>
+            <JobProvider>
+              <NarrationAssistant />
+            </JobProvider>
+          </JobErrorBoundary>
+        );
       } else {
         throw new Error("React root element not found");
       }
