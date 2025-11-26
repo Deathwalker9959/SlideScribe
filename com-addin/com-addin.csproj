@@ -70,7 +70,8 @@
     <OutputPath>bin\Debug\</OutputPath>
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
     <DefineConstants>$(DefineConstants);DEBUG;TRACE</DefineConstants>
-    <WarningLevel>4</WarningLevel>
+    <WarningLevel>5</WarningLevel>
+    <PlatformTarget>x86</PlatformTarget>
   </PropertyGroup>
   <!--
     This section defines properties that are set when the "Release" configuration is selected.
@@ -195,6 +196,7 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
+    <None Include="app.config" />
     <None Include="com-addin_TemporaryKey.pfx" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
@@ -204,6 +206,15 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
+    <Compile Include="SlideScribeLogger.cs" />
+    <Compile Include="SimpleJson.cs" />
+    <Compile Include="ComBridgeContracts.cs" />
+    <Compile Include="ComBridgeSecurity.cs" />
+    <Compile Include="ComBridgeWebSocketServer.cs" />
+    <Compile Include="ComBridgePipeServer.cs" />
+    <Compile Include="SlideScribeComBridge.cs" />
+    <Compile Include="ThisAddIn.Audio.cs" />
+    <Compile Include="ThisAddIn.Lifecycle.cs" />
     <Compile Include="ThisAddIn.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -243,5 +254,4 @@
       </FlavorProperties>
     </VisualStudio>
   </ProjectExtensions>
-
-  </Project>
+</Project>
