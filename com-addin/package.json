@@ -1,0 +1,16 @@
+{
+  "name": "slidescribe-com-addin",
+  "version": "1.0.0",
+  "description": "COM Add-in for SlideScribe PowerPoint integration",
+  "private": true,
+  "scripts": {
+    "build": "powershell -ExecutionPolicy Bypass -File BuildAddin.ps1 -Configuration Release",
+    "rebuild": "powershell -ExecutionPolicy Bypass -File BuildAddin.ps1 -Configuration Release -UninstallFirst",
+    "watch": "gulp watch",
+    "register": "powershell -ExecutionPolicy Bypass -File RegisterAddin.ps1",
+    "uninstall": "powershell -ExecutionPolicy Bypass -File UninstallAddin.ps1"
+  },
+  "devDependencies": {
+    "gulp": "^5.0.0"
+  }
+}

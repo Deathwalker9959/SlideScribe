@@ -1,9 +1,9 @@
-import React from 'react';
-import { Card } from '@ui/card';
-import { Button } from '@ui/button';
-import { Badge } from '@ui/badge';
-import { ScrollArea } from '@ui/scroll-area';
-import { Plus, Trash2, Copy, FileText } from 'lucide-react';
+import React from "react";
+import { Card } from "@ui/card";
+import { Button } from "@ui/button";
+import { Badge } from "@ui/badge";
+import { ScrollArea } from "@ui/scroll-area";
+import { Plus, Trash2, Copy, FileText } from "lucide-react";
 
 interface Slide {
   id: string;
@@ -26,15 +26,14 @@ export function SlideNavigation({
   onSlideSelect,
   onSlideAdd,
   onSlideDelete,
-  onSlideDuplicate
+  onSlideDuplicate,
 }: SlideNavigationProps) {
-  
   const getSlidePreview = (slide: Slide) => {
-    const title = slide.title || 'Untitled Slide';
-    const contentPreview = slide.content 
-      ? slide.content.substring(0, 50) + (slide.content.length > 50 ? '...' : '')
-      : 'No content';
-    
+    const title = slide.title || "Untitled Slide";
+    const contentPreview = slide.content
+      ? slide.content.substring(0, 50) + (slide.content.length > 50 ? "..." : "")
+      : "No content";
+
     return { title, contentPreview };
   };
 
@@ -46,7 +45,7 @@ export function SlideNavigation({
           Slides
         </h3>
         <Badge variant="secondary" className="text-xs">
-          {slides.length} slide{slides.length !== 1 ? 's' : ''}
+          {slides.length} slide{slides.length !== 1 ? "s" : ""}
         </Badge>
       </div>
 
@@ -55,14 +54,14 @@ export function SlideNavigation({
           {slides.map((slide, index) => {
             const { title, contentPreview } = getSlidePreview(slide);
             const isActive = slide.id === currentSlideId;
-            
+
             return (
               <div
                 key={slide.id}
                 className={`p-3 rounded-lg border cursor-pointer transition-all group ${
-                  isActive 
-                    ? 'border-primary bg-primary/5' 
-                    : 'border-border hover:border-primary/50 hover:bg-accent/50'
+                  isActive
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50 hover:bg-accent/50"
                 }`}
                 onClick={() => onSlideSelect(slide.id)}
               >
@@ -73,14 +72,10 @@ export function SlideNavigation({
                         Slide {index + 1}
                       </span>
                     </div>
-                    <h4 className="font-medium text-sm truncate mb-1">
-                      {title}
-                    </h4>
-                    <p className="text-xs text-muted-foreground line-clamp-2">
-                      {contentPreview}
-                    </p>
+                    <h4 className="font-medium text-sm truncate mb-1">{title}</h4>
+                    <p className="text-xs text-muted-foreground line-clamp-2">{contentPreview}</p>
                   </div>
-                  
+
                   <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button
                       size="sm"
@@ -114,11 +109,7 @@ export function SlideNavigation({
         </div>
       </ScrollArea>
 
-      <Button
-        onClick={onSlideAdd}
-        className="w-full flex items-center gap-2"
-        variant="outline"
-      >
+      <Button onClick={onSlideAdd} className="w-full flex items-center gap-2" variant="outline">
         <Plus className="w-4 h-4" />
         Add Slide
       </Button>

@@ -81,6 +81,11 @@ class ProgressUpdate(BaseModel):
     error: str | None = None
     slide_result: dict[str, Any] | None = None
 
+    def model_dump(self, **kwargs) -> dict[str, Any]:
+        """Override model_dump to handle datetime serialization."""
+        data = super().model_dump(**kwargs)
+        return NarrationOrchestrator._serialize_metadata(data)
+
 
 class NarrationOrchestrator:
     """Orchestrates the complete narration processing pipeline."""
@@ -91,6 +96,7 @@ class NarrationOrchestrator:
 
         # Initialize queue manager for background processing
         self.queue_manager = QueueManager()
+        logger.info("Queue manager initialized")
 
         # Cache for storing job status and progress
         self.cache = Cache()
@@ -211,18 +217,20 @@ class NarrationOrchestrator:
             "current_slide": 0,
             "progress": 0.0,
             "started_at": datetime.now(UTC).isoformat(),
-            "request": request.model_dump(),
+            "request": self._serialize_metadata(request.model_dump()),
         }
 
         # Store job in cache
         self.cache.set(f"job:{job_id}", job_data, ttl=3600)
 
         # Enqueue job for background processing
-        await self.queue_manager.enqueue("narration_jobs", {
+        import json
+        job_payload = {
             "job_id": job_id,
             "action": "process_presentation",
             "data": job_data,
-        })
+        }
+        self.queue_manager.enqueue("narration_jobs", json.dumps(job_payload))
 
         # Start background processing task
         asyncio.create_task(self._process_presentation_background(job_id, request))
@@ -282,14 +290,14 @@ class NarrationOrchestrator:
                 "slide_id": slide.slide_id,
                 "original_content": slide.content,
                 "refined_content": refined_content,
-                "audio_result": audio_result,
+                "audio_result": audio_result.model_dump() if audio_result else None,
                 "audio_file_path": audio_file_path,
-                "subtitles": subtitles,
+                "subtitles": [subtitle.model_dump() for subtitle in subtitles] if subtitles else [],
                 "processing_time": processing_time,
                 "status": "completed",
             }
             if contextual_metadata:
-                result["contextual_metadata"] = contextual_metadata
+                result["contextual_metadata"] = self._serialize_metadata(contextual_metadata)
 
             return result
 
@@ -332,8 +340,11 @@ class NarrationOrchestrator:
             audio_segments: list[AudioSegmentModel] = []
             for slide_result in processed_slides:
                 audio_path = slide_result.get("audio_file_path")
-                audio_meta = slide_result.get("audio_result") or {}
-                duration = audio_meta.get("duration") or slide_result.get("processing_time") or 5.0
+                audio_result_data = slide_result.get("audio_result")
+                if audio_result_data and isinstance(audio_result_data, dict):
+                    duration = audio_result_data.get("duration", slide_result.get("processing_time", 5.0))
+                else:
+                    duration = slide_result.get("processing_time") or 5.0
                 if audio_path:
                     audio_segments.append(
                         AudioSegmentModel(
@@ -345,6 +356,7 @@ class NarrationOrchestrator:
 
             audio_manifest: dict[str, Any] | None = None
             if audio_segments:
+                logger.info(f"Processing {len(audio_segments)} audio segments for job {job_id}")
                 combine_request = AudioCombineRequest(
                     job_id=job_id,
                     presentation_id=request.metadata.get("presentation_id", job_id) if request.metadata else job_id,
@@ -352,9 +364,11 @@ class NarrationOrchestrator:
                     output_format="wav",
                 )
                 try:
+                    logger.info(f"Combining audio segments for job {job_id}")
                     combine_response = await self.audio_processor.combine_segments(combine_request)
                     audio_manifest = combine_response.model_dump()
                     audio_manifest["combined_output_path"] = audio_manifest.get("output_path")
+                    logger.info(f"Audio segments combined successfully for job {job_id}")
 
                     timeline_entries = audio_manifest.get("timeline") or []
                     timeline_map = {
@@ -380,6 +394,7 @@ class NarrationOrchestrator:
 
                     transitions: list[AudioTransition] = []
                     if len(audio_segments) > 1:
+                        logger.info(f"Applying {len(audio_segments) - 1} audio transitions for job {job_id}")
                         transitions = [
                             AudioTransition(
                                 from_slide=audio_segments[i].slide_id,
@@ -400,6 +415,7 @@ class NarrationOrchestrator:
                         audio_manifest["output_path"] = transition_response.output_path
                         audio_manifest["output_peak_dbfs"] = transition_response.output_peak_dbfs
                         audio_manifest["output_loudness_dbfs"] = transition_response.output_loudness_dbfs
+                        logger.info(f"Audio transitions applied successfully for job {job_id}")
 
                         await self._update_progress(
                             job_id,
@@ -421,6 +437,7 @@ class NarrationOrchestrator:
                     exports: list[dict[str, Any]] = []
                     for export_format in ("mp3", "mp4"):
                         try:
+                            logger.info(f"Exporting audio as {export_format} for job {job_id}")
                             export_response = await self.audio_processor.export_mix(
                                 AudioExportRequest(
                                     job_id=job_id,
@@ -429,6 +446,7 @@ class NarrationOrchestrator:
                                 )
                             )
                             exports.append(export_response.model_dump())
+                            logger.info(f"Audio export ({export_format}) completed for job {job_id}")
                         except Exception as export_exc:  # pragma: no cover - best-effort conversions
                             logger.warning(
                                 "Audio export (%s) failed for job %s: %s",
@@ -446,26 +464,34 @@ class NarrationOrchestrator:
                             slide_audio = slide_result.setdefault("audio_metadata", {})
                             slide_audio.setdefault("timeline", timeline_map.get(slide_result.get("slide_id"), {}))
                             slide_audio["exports"] = exports
+
+                    logger.info(f"Audio processing completed successfully for job {job_id}")
+
                 except Exception as exc:
-                    logger.warning("Audio processing failed for job %s: %s", job_id, exc)
+                    logger.error(f"Audio processing failed for job {job_id}: {exc}", exc_info=True)
+                    # Continue without audio processing rather than failing completely
+                    audio_manifest = None
 
             await self._update_progress(job_id, ProcessingStep.EXPORT, total_slides,
                                        message="Exporting final presentation")
 
+            logger.info(f"Starting final presentation export for job {job_id}")
             export_result = await self._export_presentation(job_id, processed_slides, request, audio_manifest)
+            logger.info(f"Final presentation export completed for job {job_id}")
 
             # Mark job as completed
+            logger.info(f"Marking job {job_id} as completed")
             await self._update_job_status(job_id, JobStatus.COMPLETED)
-            await self._update_progress(job_id, ProcessingStep.EXPORT, total_slides,
-                                       progress=1.0, message="Processing completed")
+            await self._update_progress_with_status(job_id, ProcessingStep.EXPORT, total_slides,
+                                       JobStatus.COMPLETED, progress=1.0, message="Processing completed")
 
             logger.info(f"Completed narration job {job_id} in {time.time():.2f}s")
 
         except Exception as e:
             logger.error(f"Failed to process presentation job {job_id}: {e}")
             await self._update_job_status(job_id, JobStatus.FAILED)
-            await self._update_progress(job_id, ProcessingStep.EXPORT, 0,
-                                       error=str(e), message="Processing failed")
+            await self._update_progress_with_status(job_id, ProcessingStep.EXPORT, 0,
+                                       JobStatus.FAILED, error=str(e), message="Processing failed")
 
     async def _refine_slide_content(
         self,
@@ -930,36 +956,216 @@ class NarrationOrchestrator:
         audio_manifest: dict[str, Any] | None,
     ) -> ExportResponse:
         """Export the final presentation with audio and subtitles."""
-        export_dir = self.media_root / job_id
+        # Ensure we have an absolute path for the export directory
+        export_dir = Path(self.media_root) / job_id
+        export_dir = export_dir.resolve()  # Convert to absolute path
+
+        logger.info(f"Creating export directory: {export_dir}")
         export_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create export manifest
+        if not export_dir.exists():
+            raise FileNotFoundError(f"Failed to create export directory: {export_dir}")
+
+        logger.info(f"Export directory created/verified: {export_dir}")
+
+        # Create export manifest - serialize slides immediately
+        try:
+            logger.info(f"Serializing {len(processed_slides)} processed slides for job {job_id}")
+            serialized_slides = self._serialize_metadata({"slides": processed_slides})["slides"]
+        except Exception as e:
+            logger.error(f"Failed to serialize processed slides for job {job_id}: {e}", exc_info=True)
+            # Fallback: try to manually handle datetime serialization
+            serialized_slides = []
+            for slide in processed_slides:
+                try:
+                    slide_copy = dict(slide)  # Make a shallow copy
+                    # Remove or serialize any datetime fields manually
+                    if "created_at" in slide_copy and hasattr(slide_copy["created_at"], "isoformat"):
+                        slide_copy["created_at"] = slide_copy["created_at"].isoformat()
+                    serialized_slides.append(slide_copy)
+                except Exception as slide_error:
+                    logger.error(f"Failed to serialize individual slide for job {job_id}: {slide_error}")
+                    # Add a minimal slide representation
+                    serialized_slides.append({
+                        "slide_number": slide.get("slide_number", 0),
+                        "slide_id": slide.get("slide_id", "unknown"),
+                        "status": "completed",
+                        "error": "Serialization failed"
+                    })
+
         export_data = {
             "job_id": job_id,
-            "total_slides": len(processed_slides),
+            "total_slides": len(serialized_slides),
             "processed_at": datetime.now(UTC).isoformat(),
-            "slides": processed_slides,
+            "slides": serialized_slides,
         }
         if audio_manifest:
-            export_data["audio"] = audio_manifest
+            export_data["audio"] = self._serialize_metadata(audio_manifest)
 
         # Save manifest
         manifest_path = export_dir / "manifest.json"
         import json
-        manifest_path.write_text(json.dumps(export_data, indent=2), encoding="utf-8")
+        try:
+            logger.info(f"Saving export manifest for job {job_id}")
+            manifest_path.write_text(json.dumps(export_data, indent=2), encoding="utf-8")
+            logger.info(f"Export manifest saved successfully for job {job_id}")
+        except Exception as e:
+            logger.error(f"Failed to save export manifest for job {job_id}: {e}", exc_info=True)
+            # Last resort: save minimal manifest
+            minimal_manifest = {
+                "job_id": job_id,
+                "total_slides": len(serialized_slides),
+                "processed_at": datetime.now(UTC).isoformat(),
+                "slides": [{"slide_id": s.get("slide_id", "unknown"), "status": s.get("status", "unknown")} for s in serialized_slides],
+                "serialization_error": str(e)
+            }
+            manifest_path.write_text(json.dumps(minimal_manifest, indent=2), encoding="utf-8")
+            logger.warning(f"Saved minimal manifest for job {job_id} due to serialization issues")
 
-        # Create export response
+        # Create export response with data for Office.js embedding
         export_id = generate_hash(f"{job_id}_export_{int(time.time())}")
+
+        # Prepare data structure for Office.js audio embedding
+        office_js_data = self._prepare_office_js_data(processed_slides, audio_manifest, job_id)
+
+        # Save Office.js data file
+        office_js_path = export_dir / "office_js_data.json"
+        import json
+        try:
+            logger.info(f"Saving Office.js data to: {office_js_path}")
+            logger.info(f"Export directory exists: {export_dir.exists()}, directory: {export_dir}")
+
+            office_js_path.write_text(json.dumps(self._serialize_metadata(office_js_data), indent=2), encoding="utf-8")
+
+            # Verify file was created
+            if office_js_path.exists():
+                file_size = office_js_path.stat().st_size
+                logger.info(f"Office.js data saved successfully for job {job_id}, size: {file_size} bytes")
+            else:
+                logger.error(f"Office.js data file was not created at {office_js_path}")
+                raise FileNotFoundError(f"Failed to create Office.js data file at {office_js_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to save Office.js data for job {job_id}: {e}", exc_info=True)
+            # Create a minimal fallback file
+            try:
+                fallback_data = {
+                    "job_id": job_id,
+                    "export_type": "narration_with_audio",
+                    "error": f"Office.js data creation failed: {str(e)}",
+                    "slides": [],
+                    "base_url": f"/media/{job_id}/"
+                }
+                office_js_path.write_text(json.dumps(self._serialize_metadata(fallback_data), indent=2), encoding="utf-8")
+                file_size = office_js_path.stat().st_size
+                logger.info(f"Created fallback Office.js data for job {job_id}")
+            except Exception as fallback_error:
+                logger.error(f"Failed to create fallback Office.js data: {fallback_error}")
+                file_size = 0
 
         now = datetime.now(UTC)
         return ExportResponse(
             export_id=export_id,
-            download_url=f"/media/{job_id}/presentation_with_narration.pptx",
-            file_size=manifest_path.stat().st_size,
+            download_url=f"/media/{job_id}/office_js_data.json",
+            file_size=file_size,
             export_format=ExportFormat.PPTX,
             created_at=now,
             expires_at=now + timedelta(hours=24),
         )
+
+    def _prepare_office_js_data(
+        self,
+        processed_slides: list[dict[str, Any]],
+        audio_manifest: dict[str, Any] | None,
+        job_id: str,
+    ) -> dict[str, Any]:
+        """Prepare data structure for Office.js audio embedding in PowerPoint add-in."""
+        try:
+            logger.info(f"Preparing Office.js data for job {job_id}")
+
+            office_js_data = {
+                "job_id": job_id,
+                "export_type": "narration_with_audio",
+                "slides": [],
+                "audio_manifest": audio_manifest,
+                "base_url": f"/media/{job_id}/",
+                "exports": audio_manifest.get("exports", []) if audio_manifest else []
+            }
+
+            for slide_data in processed_slides:
+                if slide_data.get("status") != "completed":
+                    continue
+
+                slide_number = slide_data.get("slide_number", 1)
+                slide_id = slide_data.get("slide_id", f"slide_{slide_number}")
+
+                # Prepare slide data for Office.js
+                slide_info = {
+                    "slide_id": slide_id,
+                    "slide_number": slide_number,
+                    "title": slide_data.get("slide_title", f"Slide {slide_number}"),
+                    "original_content": slide_data.get("original_content", ""),
+                    "refined_content": slide_data.get("refined_content", ""),
+                    "audio": {
+                        "file_path": self._get_relative_audio_path(slide_data, job_id),
+                        "duration": slide_data.get("processing_time", 5.0),
+                        "file_size": self._get_audio_file_size(slide_data, job_id),
+                    },
+                    "subtitles": slide_data.get("subtitles", []),
+                    "transcript": slide_data.get("refined_content", ""),
+                    "metadata": {
+                        "processing_time": slide_data.get("processing_time", 0.0),
+                        "audio_metadata": slide_data.get("audio_metadata", {}),
+                        "contextual_metadata": slide_data.get("contextual_metadata", {}),
+                    }
+                }
+
+                office_js_data["slides"].append(slide_info)
+
+            logger.info(f"Prepared Office.js data for {len(office_js_data['slides'])} slides")
+            return office_js_data
+
+        except Exception as e:
+            logger.error(f"Failed to prepare Office.js data for job {job_id}: {e}")
+            # Return minimal data structure
+            return {
+                "job_id": job_id,
+                "export_type": "narration_with_audio",
+                "slides": [],
+                "audio_manifest": audio_manifest,
+                "base_url": f"/media/{job_id}/",
+                "error": str(e)
+            }
+
+    def _get_relative_audio_path(self, slide_data: dict[str, Any], job_id: str) -> str | None:
+        """Get relative audio file path for the add-in."""
+        # Check for slide-specific audio file
+        audio_path = slide_data.get("audio_file_path")
+        if audio_path:
+            # Convert to relative URL path
+            path_obj = Path(audio_path)
+            if path_obj.name.startswith(f"{job_id}/"):
+                return f"/media/{audio_path}"
+            else:
+                return f"/media/{job_id}/audio/{path_obj.name}"
+
+        # Fallback to slide number based naming
+        slide_number = slide_data.get("slide_number", 1)
+        return f"/media/{job_id}/audio/slide_{slide_number}.wav"
+
+    def _get_audio_file_size(self, slide_data: dict[str, Any], job_id: str) -> int:
+        """Get audio file size for the slide."""
+        try:
+            audio_path = slide_data.get("audio_file_path")
+            if audio_path and Path(audio_path).exists():
+                return Path(audio_path).stat().st_size
+
+            # Fallback: estimate based on duration (assuming 16kbps for speech)
+            duration = slide_data.get("processing_time", 5.0)
+            return int(duration * 2000)  # Rough estimate in bytes
+
+        except Exception:
+            return 1024  # Default 1KB fallback
 
     async def _update_job_status(self, job_id: str, status: JobStatus):
         """Update the overall job status."""
@@ -1017,6 +1223,55 @@ class NarrationOrchestrator:
         # Send to WebSocket clients (if WebSocket manager is available)
         await self._send_progress_update(progress_update)
 
+    async def _update_progress_with_status(
+        self,
+        job_id: str,
+        step: ProcessingStep,
+        current_slide: int,
+        status: JobStatus,
+        progress: float | None = None,
+        message: str | None = None,
+        error: str | None = None,
+        slide_result: dict[str, Any] | None = None,
+    ):
+        """Update progress for a processing job with specific status."""
+        job_data = self.cache.get(f"job:{job_id}")
+        if not job_data:
+            return
+
+        total_slides = job_data.get("total_slides", 1)
+
+        # Calculate progress if not provided
+        if progress is None:
+            progress = current_slide / total_slides
+
+        # Estimate time remaining (simple calculation)
+        elapsed = time.time() - time.mktime(datetime.fromisoformat(job_data["started_at"]).timetuple())
+        if progress > 0:
+            estimated_total = elapsed / progress
+            time_remaining = estimated_total - elapsed
+        else:
+            time_remaining = 0.0
+
+        progress_update = ProgressUpdate(
+            job_id=job_id,
+            status=status,  # Use provided status instead of hardcoded PROCESSING
+            current_step=step,
+            current_slide=current_slide,
+            total_slides=total_slides,
+            progress=progress,
+            estimated_time_remaining=time_remaining,
+            message=message,
+            error=error,
+            slide_result=slide_result,
+        )
+
+        # Store progress update in cache
+        self.cache.set(f"progress:{job_id}", progress_update.model_dump(), ttl=3600)
+
+        # Send to WebSocket clients (if WebSocket manager is available)
+        await self._send_progress_update(progress_update)
+
     async def _send_progress_update(self, progress_update: ProgressUpdate):
         """Send progress update to WebSocket clients."""
         try:
@@ -1041,6 +1296,37 @@ class NarrationOrchestrator:
             job_data["progress"] = progress_data
 
         return job_data
+
+    @staticmethod
+    def _serialize_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+        """Serialize metadata to ensure JSON compatibility."""
+        def serialize_value(value: Any) -> Any:
+            # Handle datetime objects
+            if isinstance(value, datetime):
+                return value.isoformat()
+            # Handle Pydantic models first (they might contain datetime fields)
+            elif hasattr(value, 'model_dump'):
+                dumped = value.model_dump()
+                return serialize_value(dumped)  # Recursively serialize the dumped data
+            # Handle dictionaries
+            elif isinstance(value, dict):
+                return {k: serialize_value(v) for k, v in value.items()}
+            # Handle lists and tuples
+            elif isinstance(value, (list, tuple)):
+                return [serialize_value(item) for item in value]
+            # Handle other objects with datetime-like attributes
+            elif hasattr(value, '__dict__'):
+                # Check for common datetime attribute names
+                if hasattr(value, 'created_at') and isinstance(value.created_at, datetime):
+                    obj_dict = value.__dict__.copy()
+                    obj_dict['created_at'] = value.created_at.isoformat()
+                    return serialize_value(obj_dict)
+                else:
+                    return str(value)  # Convert to string as fallback
+            else:
+                return value
+
+        return {k: serialize_value(v) for k, v in metadata.items()}
 
     async def cancel_job(self, job_id: str) -> bool:
         """Cancel a processing job."""

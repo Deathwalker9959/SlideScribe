@@ -1,34 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { Card } from '@ui/card';
-import { Button } from '@ui/button';
-import { Textarea } from '@ui/textarea';
-import { Badge } from '@ui/badge';
-import { Separator } from '@ui/separator';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/select';
-import { Slider } from '@ui/slider';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@ui/tabs';
-import { ScrollArea } from '@ui/scroll-area';
-import { 
-  Play, 
-  Pause, 
-  RotateCcw, 
-  Mic, 
-  FileText, 
-  Clock, 
-  Settings, 
-  Volume2, 
-  Gauge, 
+import React, { useState, useEffect } from "react";
+import { Card } from "@ui/card";
+import { Button } from "@ui/button";
+import { Textarea } from "@ui/textarea";
+import { Badge } from "@ui/badge";
+import { Separator } from "@ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select";
+import { Slider } from "@ui/slider";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@ui/tabs";
+import { ScrollArea } from "@ui/scroll-area";
+import {
+  Play,
+  Pause,
+  RotateCcw,
+  Mic,
+  FileText,
+  Clock,
+  Settings,
+  Volume2,
+  Gauge,
   Palette,
-  AlertTriangle, 
-  CheckCircle, 
+  AlertTriangle,
+  CheckCircle,
   Lightbulb,
   ChevronDown,
-  ChevronUp
-} from 'lucide-react';
+  ChevronUp,
+} from "lucide-react";
 
 interface Suggestion {
   id: string;
-  type: 'grammar' | 'style' | 'clarity';
+  type: "grammar" | "style" | "clarity";
   text: string;
   suggestion: string;
   position: { start: number; end: number };
@@ -56,96 +56,96 @@ interface TaskPaneProps {
   onTextUpdate?: (text: string) => void;
 }
 
-export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: TaskPaneProps) {
-  const [activeTab, setActiveTab] = useState('suggestions');
+export function TaskPane({ slideContent = "", slideTitle = "", onTextUpdate }: TaskPaneProps) {
+  const [activeTab, setActiveTab] = useState("suggestions");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [narrationScript, setNarrationScript] = useState<NarrationScript | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showTTSControls, setShowTTSControls] = useState(false);
-  
+
   const [ttsSettings, setTTSSettings] = useState<TTSSettings>({
-    voice: 'sarah',
+    voice: "sarah",
     speed: 1.0,
     pitch: 1.0,
     volume: 0.8,
-    tone: 'professional',
-    language: 'en-US'
+    tone: "professional",
+    language: "en-US",
   });
 
   const voices = [
-    { id: 'sarah', name: 'Sarah', description: 'Warm, professional female voice' },
-    { id: 'david', name: 'David', description: 'Clear, confident male voice' },
-    { id: 'emma', name: 'Emma', description: 'Friendly, engaging female voice' },
-    { id: 'james', name: 'James', description: 'Deep, authoritative male voice' },
-    { id: 'aria', name: 'Aria', description: 'Energetic, youthful female voice' },
-    { id: 'marcus', name: 'Marcus', description: 'Calm, reassuring male voice' }
+    { id: "sarah", name: "Sarah", description: "Warm, professional female voice" },
+    { id: "david", name: "David", description: "Clear, confident male voice" },
+    { id: "emma", name: "Emma", description: "Friendly, engaging female voice" },
+    { id: "james", name: "James", description: "Deep, authoritative male voice" },
+    { id: "aria", name: "Aria", description: "Energetic, youthful female voice" },
+    { id: "marcus", name: "Marcus", description: "Calm, reassuring male voice" },
   ];
 
   const tones = [
-    { id: 'professional', name: 'Professional', description: 'Business-appropriate tone' },
-    { id: 'conversational', name: 'Conversational', description: 'Friendly and approachable' },
-    { id: 'enthusiastic', name: 'Enthusiastic', description: 'Energetic and engaging' },
-    { id: 'calm', name: 'Calm', description: 'Steady and reassuring' },
-    { id: 'authoritative', name: 'Authoritative', description: 'Confident and commanding' },
-    { id: 'empathetic', name: 'Empathetic', description: 'Warm and understanding' }
+    { id: "professional", name: "Professional", description: "Business-appropriate tone" },
+    { id: "conversational", name: "Conversational", description: "Friendly and approachable" },
+    { id: "enthusiastic", name: "Enthusiastic", description: "Energetic and engaging" },
+    { id: "calm", name: "Calm", description: "Steady and reassuring" },
+    { id: "authoritative", name: "Authoritative", description: "Confident and commanding" },
+    { id: "empathetic", name: "Empathetic", description: "Warm and understanding" },
   ];
 
   const languages = [
-    { id: 'en-US', name: 'English (US)' },
-    { id: 'en-GB', name: 'English (UK)' },
-    { id: 'en-AU', name: 'English (AU)' },
-    { id: 'es-ES', name: 'Spanish' },
-    { id: 'fr-FR', name: 'French' },
-    { id: 'de-DE', name: 'German' }
+    { id: "en-US", name: "English (US)" },
+    { id: "en-GB", name: "English (UK)" },
+    { id: "en-AU", name: "English (AU)" },
+    { id: "es-ES", name: "Spanish" },
+    { id: "fr-FR", name: "French" },
+    { id: "de-DE", name: "German" },
   ];
 
   // Generate mock suggestions based on content
   useEffect(() => {
     const generateSuggestions = () => {
       const mockSuggestions: Suggestion[] = [];
-      const content = slideContent + ' ' + slideTitle;
-      
-      if (content.includes('will')) {
+      const content = slideContent + " " + slideTitle;
+
+      if (content.includes("will")) {
         mockSuggestions.push({
-          id: 'sug-1',
-          type: 'style',
-          text: 'will discuss',
+          id: "sug-1",
+          type: "style",
+          text: "will discuss",
           suggestion: 'Consider using "we\'ll explore" for a more engaging tone',
-          position: { start: 0, end: 0 }
-        });
-      }
-      
-      if (content.length > 200) {
-        mockSuggestions.push({
-          id: 'sug-2',
-          type: 'clarity',
-          text: 'This is a long sentence',
-          suggestion: 'Consider breaking this into shorter, more digestible sentences',
-          position: { start: 0, end: 0 }
-        });
-      }
-      
-      if (slideTitle.length > 50) {
-        mockSuggestions.push({
-          id: 'sug-3',
-          type: 'clarity',
-          text: slideTitle,
-          suggestion: 'Slide titles work best when kept under 50 characters',
-          position: { start: 0, end: 0 }
+          position: { start: 0, end: 0 },
         });
       }
 
-      if (content.includes('basically') || content.includes('actually')) {
+      if (content.length > 200) {
         mockSuggestions.push({
-          id: 'sug-4',
-          type: 'style',
-          text: 'basically',
-          suggestion: 'Remove filler words for more professional presentation',
-          position: { start: 0, end: 0 }
+          id: "sug-2",
+          type: "clarity",
+          text: "This is a long sentence",
+          suggestion: "Consider breaking this into shorter, more digestible sentences",
+          position: { start: 0, end: 0 },
         });
       }
-      
+
+      if (slideTitle.length > 50) {
+        mockSuggestions.push({
+          id: "sug-3",
+          type: "clarity",
+          text: slideTitle,
+          suggestion: "Slide titles work best when kept under 50 characters",
+          position: { start: 0, end: 0 },
+        });
+      }
+
+      if (content.includes("basically") || content.includes("actually")) {
+        mockSuggestions.push({
+          id: "sug-4",
+          type: "style",
+          text: "basically",
+          suggestion: "Remove filler words for more professional presentation",
+          position: { start: 0, end: 0 },
+        });
+      }
+
       setSuggestions(mockSuggestions);
     };
 
@@ -154,11 +154,11 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
 
   const getSuggestionIcon = (type: string) => {
     switch (type) {
-      case 'grammar':
+      case "grammar":
         return <AlertTriangle className="w-4 h-4 text-red-500" />;
-      case 'style':
+      case "style":
         return <Lightbulb className="w-4 h-4 text-yellow-500" />;
-      case 'clarity':
+      case "clarity":
         return <CheckCircle className="w-4 h-4 text-blue-500" />;
       default:
         return <Lightbulb className="w-4 h-4" />;
@@ -167,19 +167,19 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
 
   const getSuggestionColor = (type: string) => {
     switch (type) {
-      case 'grammar':
-        return 'bg-red-50 border-red-200';
-      case 'style':
-        return 'bg-yellow-50 border-yellow-200';
-      case 'clarity':
-        return 'bg-blue-50 border-blue-200';
+      case "grammar":
+        return "bg-red-50 border-red-200";
+      case "style":
+        return "bg-yellow-50 border-yellow-200";
+      case "clarity":
+        return "bg-blue-50 border-blue-200";
       default:
-        return 'bg-gray-50 border-gray-200';
+        return "bg-gray-50 border-gray-200";
     }
   };
 
   const handleApplySuggestion = (suggestionId: string) => {
-    setSuggestions(suggestions.filter(s => s.id !== suggestionId));
+    setSuggestions(suggestions.filter((s) => s.id !== suggestionId));
   };
 
   const handleGenerateScript = async () => {
@@ -189,7 +189,7 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
         id: `script-${Date.now()}`,
         script: generateMockScript(slideTitle, slideContent),
         duration: Math.round(45 / ttsSettings.speed),
-        generatedAt: new Date()
+        generatedAt: new Date(),
       };
       setNarrationScript(newScript);
       setIsGenerating(false);
@@ -200,14 +200,14 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
     if (!title && !content) {
       return "Let's begin our presentation. This slide will introduce our key concepts and set the foundation for our discussion.";
     }
-    
+
     let script = "";
     if (title) {
       script += `Let's explore ${title.toLowerCase()}. `;
     }
-    
+
     if (content) {
-      const sentences = content.split('.').filter(s => s.trim().length > 0);
+      const sentences = content.split(".").filter((s) => s.trim().length > 0);
       if (sentences.length > 0) {
         script += `Here we can see that ${sentences[0].toLowerCase().trim()}. `;
         if (sentences.length > 1) {
@@ -215,8 +215,9 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
         }
       }
     }
-    
-    script += "This information is crucial for understanding our overall objectives and will guide us through the next steps.";
+
+    script +=
+      "This information is crucial for understanding our overall objectives and will guide us through the next steps.";
     return script;
   };
 
@@ -233,17 +234,17 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
   const updateTTSSettings = (key: keyof TTSSettings, value: any) => {
-    setTTSSettings(prev => ({ ...prev, [key]: value }));
+    setTTSSettings((prev) => ({ ...prev, [key]: value }));
   };
 
   const getSpeedLabel = (speed: number) => {
-    if (speed <= 0.7) return 'Slow';
-    if (speed <= 1.3) return 'Normal';
-    return 'Fast';
+    if (speed <= 0.7) return "Slow";
+    if (speed <= 1.3) return "Normal";
+    return "Fast";
   };
 
   return (
@@ -258,10 +259,7 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
       <Tabs value={activeTab} onValueChange={setActiveTab} className="ui-tabs">
         <div className="ui-tabs__bar">
           <TabsList className="ui-tabs__list">
-            <TabsTrigger 
-              value="suggestions" 
-              className="ui-tab-trigger"
-            >
+            <TabsTrigger value="suggestions" className="ui-tab-trigger">
               <div className="ui-tab-trigger__content">
                 <Lightbulb className="ui-icon ui-icon--sm" />
                 <span>Suggestions</span>
@@ -272,10 +270,7 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
                 )}
               </div>
             </TabsTrigger>
-            <TabsTrigger 
-              value="narration"
-              className="ui-tab-trigger"
-            >
+            <TabsTrigger value="narration" className="ui-tab-trigger">
               <div className="ui-tab-trigger__content">
                 <Mic className="ui-icon ui-icon--sm" />
                 <span>Narration</span>
@@ -302,10 +297,7 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
                 </div>
               ) : (
                 suggestions.map((suggestion) => (
-                  <Card
-                    key={suggestion.id}
-                    className={`ui-card--suggestion`}
-                  >
+                  <Card key={suggestion.id} className={`ui-card--suggestion`}>
                     <div className="ui-suggestion">
                       <div className="ui-suggestion__meta">
                         {getSuggestionIcon(suggestion.type)}
@@ -314,8 +306,12 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
                         </Badge>
                       </div>
                       <div className="ui-suggestion__body">
-                        <p className="ui-suggestion__original"><span className="ui-strong">Original:</span> "{suggestion.text}"</p>
-                        <p className="ui-suggestion__text"><span className="ui-strong">Suggestion:</span> {suggestion.suggestion}</p>
+                        <p className="ui-suggestion__original">
+                          <span className="ui-strong">Original:</span> "{suggestion.text}"
+                        </p>
+                        <p className="ui-suggestion__text">
+                          <span className="ui-strong">Suggestion:</span> {suggestion.suggestion}
+                        </p>
                         <Button
                           size="sm"
                           onClick={() => handleApplySuggestion(suggestion.id)}
@@ -346,7 +342,11 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
                 Voice Settings
               </div>
               <div className="ui-voice-controls__chev">
-                {showTTSControls ? <ChevronUp className="ui-icon ui-icon--sm" /> : <ChevronDown className="ui-icon ui-icon--sm" />}
+                {showTTSControls ? (
+                  <ChevronUp className="ui-icon ui-icon--sm" />
+                ) : (
+                  <ChevronDown className="ui-icon ui-icon--sm" />
+                )}
               </div>
             </Button>
           </div>
@@ -360,7 +360,7 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
                     <label className="ui-label">Voice</label>
                     <Select
                       value={ttsSettings.voice}
-                      onValueChange={(value) => updateTTSSettings('voice', value)}
+                      onValueChange={(value) => updateTTSSettings("voice", value)}
                     >
                       <SelectTrigger className="ui-select__trigger">
                         <SelectValue />
@@ -382,7 +382,7 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
                     <label className="ui-label">Language</label>
                     <Select
                       value={ttsSettings.language}
-                      onValueChange={(value) => updateTTSSettings('language', value)}
+                      onValueChange={(value) => updateTTSSettings("language", value)}
                     >
                       <SelectTrigger className="ui-select__trigger">
                         <SelectValue />
@@ -398,10 +398,12 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
                   </div>
 
                   <div className="ui-tts-controls__group">
-                    <label className="ui-label ui-label--inline"><Palette className="ui-icon ui-icon--sm" /> Tone</label>
+                    <label className="ui-label ui-label--inline">
+                      <Palette className="ui-icon ui-icon--sm" /> Tone
+                    </label>
                     <Select
                       value={ttsSettings.tone}
-                      onValueChange={(value) => updateTTSSettings('tone', value)}
+                      onValueChange={(value) => updateTTSSettings("tone", value)}
                     >
                       <SelectTrigger className="ui-select__trigger">
                         <SelectValue />
@@ -425,23 +427,32 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
                 {/* Audio Controls */}
                 <div className="ui-audio-controls">
                   <div className="ui-audio-controls__group">
-                    <label className="ui-label"><Gauge className="ui-icon ui-icon--sm" /> Speed: {getSpeedLabel(ttsSettings.speed)} ({ttsSettings.speed.toFixed(1)}x)</label>
+                    <label className="ui-label">
+                      <Gauge className="ui-icon ui-icon--sm" /> Speed:{" "}
+                      {getSpeedLabel(ttsSettings.speed)} ({ttsSettings.speed.toFixed(1)}x)
+                    </label>
                     <Slider
                       value={[ttsSettings.speed]}
-                      onValueChange={(value) => updateTTSSettings('speed', value[0])}
+                      onValueChange={(value) => updateTTSSettings("speed", value[0])}
                       min={0.5}
                       max={2.0}
                       step={0.1}
                       className="ui-slider"
                     />
-                    <div className="ui-slider__ticks"><span>0.5x</span><span>2.0x</span></div>
+                    <div className="ui-slider__ticks">
+                      <span>0.5x</span>
+                      <span>2.0x</span>
+                    </div>
                   </div>
 
                   <div className="ui-audio-controls__group">
-                    <label className="ui-label"><Volume2 className="ui-icon ui-icon--sm" /> Volume: {Math.round(ttsSettings.volume * 100)}%</label>
+                    <label className="ui-label">
+                      <Volume2 className="ui-icon ui-icon--sm" /> Volume:{" "}
+                      {Math.round(ttsSettings.volume * 100)}%
+                    </label>
                     <Slider
                       value={[ttsSettings.volume]}
-                      onValueChange={(value) => updateTTSSettings('volume', value[0])}
+                      onValueChange={(value) => updateTTSSettings("volume", value[0])}
                       min={0}
                       max={1}
                       step={0.1}
@@ -463,10 +474,10 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
                   </Badge>
                   <Badge variant="outline" className="ui-badge--small ui-badge--inline">
                     <Mic className="ui-icon ui-icon--xs" />
-                    {voices.find(v => v.id === ttsSettings.voice)?.name}
+                    {voices.find((v) => v.id === ttsSettings.voice)?.name}
                   </Badge>
                 </div>
-                
+
                 <Textarea
                   value={narrationScript.script}
                   onChange={(e) => handleScriptChange(e.target.value)}
@@ -493,7 +504,7 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
                       </>
                     )}
                   </Button>
-                  
+
                   <Button
                     size="sm"
                     variant="outline"
@@ -510,7 +521,9 @@ export function TaskPane({ slideContent = '', slideTitle = '', onTextUpdate }: T
               <div className="ui-empty-script">
                 <FileText className="ui-icon ui-icon--lg ui-empty-script__icon" />
                 <h4 className="ui-empty-script__title">No narration script yet</h4>
-                <p className="ui-empty-script__desc">Generate an AI-powered narration script based on your slide content</p>
+                <p className="ui-empty-script__desc">
+                  Generate an AI-powered narration script based on your slide content
+                </p>
                 <Button
                   onClick={handleGenerateScript}
                   disabled={isGenerating}

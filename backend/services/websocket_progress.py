@@ -40,7 +40,13 @@ class WebSocketProgressManager:
                     if not subscribers:
                         self._job_subscriptions.pop(job_id, None)
         if websocket:
-            await websocket.close()
+            try:
+                # Only close if the WebSocket appears to be still open
+                if websocket.client_state.name == "CONNECTED":
+                    await websocket.close()
+            except Exception:
+                # Ignore errors during close - connection may already be closed
+                pass
 
     async def subscribe(self, client_id: str, job_id: str) -> None:
         """Subscribe a client to a specific job."""

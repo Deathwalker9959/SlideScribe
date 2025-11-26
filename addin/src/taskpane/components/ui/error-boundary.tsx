@@ -1,6 +1,6 @@
-import React, { Component, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
-import { Button } from './button';
+import React, { Component, ReactNode } from "react";
+import { AlertTriangle, RefreshCw, Home } from "lucide-react";
+import { Button } from "./button";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -25,7 +25,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       hasError: false,
       error: null,
       errorInfo: null,
-      errorId: '',
+      errorId: "",
     };
   }
 
@@ -41,7 +41,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     this.setState({ errorInfo });
 
     // Log error for debugging
-    console.error('ErrorBoundary caught an error:', {
+    console.error("ErrorBoundary caught an error:", {
       error,
       errorInfo,
       errorId: this.state.errorId,
@@ -80,15 +80,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   private _isCriticalError(error: Error): boolean {
     // Define what constitutes a critical error that shouldn't auto-reset
     const criticalErrors = [
-      'ChunkLoadError',
-      'TypeError: Cannot read propert',
-      'NetworkError',
-      'Offline',
+      "ChunkLoadError",
+      "TypeError: Cannot read propert",
+      "NetworkError",
+      "Offline",
     ];
 
-    return criticalErrors.some(criticalError =>
-      error.message.includes(criticalError)
-    );
+    return criticalErrors.some((criticalError) => error.message.includes(criticalError));
   }
 
   private resetError = () => {
@@ -96,7 +94,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       hasError: false,
       error: null,
       errorInfo: null,
-      errorId: '',
+      errorId: "",
     });
   };
 
@@ -129,16 +127,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               </div>
             </div>
 
-            <h1 className="text-xl font-semibold text-gray-900 mb-2">
-              Something went wrong
-            </h1>
+            <h1 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h1>
 
             <p className="text-gray-600 mb-6">
               We encountered an unexpected error. This has been logged and we'll look into it.
             </p>
 
             {/* Error details for development */}
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {process.env.NODE_ENV === "development" && this.state.error && (
               <details className="text-left mb-6 p-4 bg-gray-100 rounded-lg">
                 <summary className="cursor-pointer font-medium text-gray-900 mb-2">
                   Error Details (Development Only)
@@ -163,10 +159,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             )}
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button
-                onClick={this.handleRetry}
-                className="flex items-center gap-2"
-              >
+              <Button onClick={this.handleRetry} className="flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" />
                 Try Again
               </Button>
@@ -199,8 +192,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 export function OfficeJSErrorBoundary({ children }: { children: ReactNode }) {
   const handleOfficeJSError = (error: Error, errorInfo: React.ErrorInfo) => {
     // Special handling for Office.js related errors
-    if (error.message.includes('Office') || error.message.includes('PowerPoint')) {
-      console.error('Office.js Error:', error);
+    if (error.message.includes("Office") || error.message.includes("PowerPoint")) {
+      console.error("Office.js Error:", error);
       // You could send this to an analytics service
     }
   };
@@ -210,23 +203,16 @@ export function OfficeJSErrorBoundary({ children }: { children: ReactNode }) {
       <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
         <AlertTriangle className="w-6 h-6 text-orange-600" />
       </div>
-      <h3 className="text-lg font-semibold text-gray-900 mb-2">
-        Office.js Error
-      </h3>
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">Office.js Error</h3>
       <p className="text-gray-600 mb-4">
         There was an issue with PowerPoint. Make sure PowerPoint is running and try again.
       </p>
-      <Button onClick={() => window.location.reload()}>
-        Reload Page
-      </Button>
+      <Button onClick={() => window.location.reload()}>Reload Page</Button>
     </div>
   );
 
   return (
-    <ErrorBoundary
-      fallback={officeJSErrorFallback}
-      onError={handleOfficeJSError}
-    >
+    <ErrorBoundary fallback={officeJSErrorFallback} onError={handleOfficeJSError}>
       {children}
     </ErrorBoundary>
   );
@@ -234,8 +220,8 @@ export function OfficeJSErrorBoundary({ children }: { children: ReactNode }) {
 
 export function NetworkErrorBoundary({ children }: { children: ReactNode }) {
   const handleNetworkError = (error: Error, errorInfo: React.ErrorInfo) => {
-    if (error.message.includes('fetch') || error.message.includes('network')) {
-      console.error('Network Error:', error);
+    if (error.message.includes("fetch") || error.message.includes("network")) {
+      console.error("Network Error:", error);
     }
   };
 
@@ -244,23 +230,16 @@ export function NetworkErrorBoundary({ children }: { children: ReactNode }) {
       <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
         <AlertTriangle className="w-6 h-6 text-red-600" />
       </div>
-      <h3 className="text-lg font-semibold text-gray-900 mb-2">
-        Network Error
-      </h3>
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">Network Error</h3>
       <p className="text-gray-600 mb-4">
         Unable to connect to the server. Please check your internet connection and try again.
       </p>
-      <Button onClick={() => window.location.reload()}>
-        Reload Page
-      </Button>
+      <Button onClick={() => window.location.reload()}>Reload Page</Button>
     </div>
   );
 
   return (
-    <ErrorBoundary
-      fallback={networkErrorFallback}
-      onError={handleNetworkError}
-    >
+    <ErrorBoundary fallback={networkErrorFallback} onError={handleNetworkError}>
       {children}
     </ErrorBoundary>
   );
@@ -271,7 +250,7 @@ export function useErrorHandler() {
   const [error, setError] = React.useState<Error | null>(null);
 
   const handleError = React.useCallback((error: Error) => {
-    console.error('Error caught by useErrorHandler:', error);
+    console.error("Error caught by useErrorHandler:", error);
     setError(error);
   }, []);
 
@@ -297,24 +276,17 @@ interface InlineErrorProps {
   className?: string;
 }
 
-export function InlineError({
-  error,
-  onRetry,
-  onDismiss,
-  className = ''
-}: InlineErrorProps) {
-  const errorMessage = typeof error === 'string' ? error : error.message;
+export function InlineError({ error, onRetry, onDismiss, className = "" }: InlineErrorProps) {
+  const errorMessage = typeof error === "string" ? error : error.message;
 
   return (
-    <div className={`flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg ${className}`}>
+    <div
+      className={`flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg ${className}`}
+    >
       <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
       <div className="flex-1 min-w-0">
-        <h4 className="text-sm font-medium text-red-800">
-          Error occurred
-        </h4>
-        <p className="text-sm text-red-700 mt-1 break-words">
-          {errorMessage}
-        </p>
+        <h4 className="text-sm font-medium text-red-800">Error occurred</h4>
+        <p className="text-sm text-red-700 mt-1 break-words">{errorMessage}</p>
         {(onRetry || onDismiss) && (
           <div className="flex gap-2 mt-3">
             {onRetry && (

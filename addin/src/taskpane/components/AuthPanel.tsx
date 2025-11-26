@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Button } from '@ui/button';
-import { Input } from '@ui/input';
-import { Label } from '@ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/card';
-import { Alert, AlertDescription } from '@ui/alert';
-import { Loader2, LogIn, LogOut, User, Shield, ShieldCheck } from 'lucide-react';
-import { apiClient, LoginRequest } from '@utils/apiClient';
+import React, { useState, useEffect } from "react";
+import { Button } from "@ui/button";
+import { Input } from "@ui/input";
+import { Label } from "@ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@ui/card";
+import { Alert, AlertDescription } from "@ui/alert";
+import { Loader2, LogIn, LogOut, User, Shield, ShieldCheck } from "lucide-react";
+import { apiClient, LoginRequest } from "@utils/apiClient";
 
 interface AuthPanelProps {
   onAuthChange?: (isAuthenticated: boolean) => void;
@@ -17,8 +17,8 @@ export function AuthPanel({ onAuthChange, className }: AuthPanelProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loginForm, setLoginForm] = useState<LoginRequest>({
-    username: '',
-    password: '',
+    username: "",
+    password: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [showLogin, setShowLogin] = useState(false);
@@ -37,7 +37,7 @@ export function AuthPanel({ onAuthChange, className }: AuthPanelProps) {
         onAuthChange?.(true);
       }
     } catch (error) {
-      console.log('Not authenticated:', error);
+      console.log("Not authenticated:", error);
       setIsAuthenticated(false);
       setCurrentUser(null);
       onAuthChange?.(false);
@@ -54,10 +54,10 @@ export function AuthPanel({ onAuthChange, className }: AuthPanelProps) {
       setCurrentUser(response.user);
       setIsAuthenticated(true);
       setShowLogin(false);
-      setLoginForm({ username: '', password: '' });
+      setLoginForm({ username: "", password: "" });
       onAuthChange?.(true);
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Login failed');
+      setError(error instanceof Error ? error.message : "Login failed");
     } finally {
       setIsLoading(false);
     }
@@ -71,22 +71,23 @@ export function AuthPanel({ onAuthChange, className }: AuthPanelProps) {
       setIsAuthenticated(false);
       onAuthChange?.(false);
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleInputChange = (field: keyof LoginRequest) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLoginForm(prev => ({
-      ...prev,
-      [field]: e.target.value,
-    }));
-  };
+  const handleInputChange =
+    (field: keyof LoginRequest) => (e: React.ChangeEvent<HTMLInputElement>) => {
+      setLoginForm((prev) => ({
+        ...prev,
+        [field]: e.target.value,
+      }));
+    };
 
   if (isAuthenticated && currentUser) {
     return (
-      <div className={`auth-panel auth-panel--authenticated ${className || ''}`}>
+      <div className={`auth-panel auth-panel--authenticated ${className || ""}`}>
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -94,12 +95,7 @@ export function AuthPanel({ onAuthChange, className }: AuthPanelProps) {
                 <ShieldCheck className="h-5 w-5 text-green-600" />
                 <CardTitle className="text-lg">Authenticated</CardTitle>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLogout}
-                disabled={isLoading}
-              >
+              <Button variant="outline" size="sm" onClick={handleLogout} disabled={isLoading}>
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
@@ -130,16 +126,14 @@ export function AuthPanel({ onAuthChange, className }: AuthPanelProps) {
 
   if (showLogin) {
     return (
-      <div className={`auth-panel auth-panel--login ${className || ''}`}>
+      <div className={`auth-panel auth-panel--login ${className || ""}`}>
         <Card>
           <CardHeader>
             <div className="flex items-center space-x-2">
               <Shield className="h-5 w-5" />
               <CardTitle>Authentication Required</CardTitle>
             </div>
-            <CardDescription>
-              Please login to access SlideScribe features
-            </CardDescription>
+            <CardDescription>Please login to access SlideScribe features</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
@@ -148,39 +142,35 @@ export function AuthPanel({ onAuthChange, className }: AuthPanelProps) {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
-              
+
               <div className="space-y-2">
                 <Label htmlFor="username">Username</Label>
                 <Input
                   id="username"
                   type="text"
                   value={loginForm.username}
-                  onChange={handleInputChange('username')}
+                  onChange={handleInputChange("username")}
                   placeholder="Enter your username"
                   required
                   disabled={isLoading}
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
                   type="password"
                   value={loginForm.password}
-                  onChange={handleInputChange('password')}
+                  onChange={handleInputChange("password")}
                   placeholder="Enter your password"
                   required
                   disabled={isLoading}
                 />
               </div>
-              
+
               <div className="flex space-x-2">
-                <Button
-                  type="submit"
-                  className="flex-1"
-                  disabled={isLoading}
-                >
+                <Button type="submit" className="flex-1" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -210,22 +200,17 @@ export function AuthPanel({ onAuthChange, className }: AuthPanelProps) {
   }
 
   return (
-    <div className={`auth-panel auth-panel--prompt ${className || ''}`}>
+    <div className={`auth-panel auth-panel--prompt ${className || ""}`}>
       <Card>
         <CardHeader>
           <div className="flex items-center space-x-2">
             <Shield className="h-5 w-5 text-muted-foreground" />
             <CardTitle>Authentication Required</CardTitle>
           </div>
-          <CardDescription>
-            Login to access SlideScribe narration features
-          </CardDescription>
+          <CardDescription>Login to access SlideScribe narration features</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button
-            onClick={() => setShowLogin(true)}
-            className="w-full"
-          >
+          <Button onClick={() => setShowLogin(true)} className="w-full">
             <LogIn className="h-4 w-4 mr-2" />
             Login to SlideScribe
           </Button>
@@ -243,13 +228,13 @@ export function DevAuthPanel({ onAuthChange, className }: AuthPanelProps) {
     setIsLoading(true);
     try {
       // Try to login with test credentials
-      await apiClient.login({ username: 'testuser', password: 'testpass' });
+      await apiClient.login({ username: "testuser", password: "testpass" });
       onAuthChange?.(true);
     } catch (error) {
-      console.log('Auto-login failed, using mock auth for development');
+      console.log("Auto-login failed, using mock auth for development");
       // For development, set a mock token
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('slidescribe_auth_token', 'dev_token');
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("slidescribe_auth_token", "dev_token");
       }
       onAuthChange?.(true);
     } finally {
@@ -258,13 +243,11 @@ export function DevAuthPanel({ onAuthChange, className }: AuthPanelProps) {
   };
 
   return (
-    <div className={`auth-panel auth-panel--dev ${className || ''}`}>
+    <div className={`auth-panel auth-panel--dev ${className || ""}`}>
       <Card>
         <CardHeader>
           <CardTitle>Development Mode</CardTitle>
-          <CardDescription>
-            Quick access for development and testing
-          </CardDescription>
+          <CardDescription>Quick access for development and testing</CardDescription>
         </CardHeader>
         <CardContent>
           <Button

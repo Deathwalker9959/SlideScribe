@@ -3,10 +3,19 @@
  * Centralized state management for narration jobs with error boundaries and loading states
  */
 
-import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect } from "react";
 
 // Job state types
-export type JobStatus = 'idle' | 'extracting' | 'refining' | 'synthesizing' | 'generating-subtitles' | 'processing' | 'completed' | 'failed' | 'cancelled';
+export type JobStatus =
+  | "idle"
+  | "extracting"
+  | "refining"
+  | "synthesizing"
+  | "generating-subtitles"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 export type JobError = {
   code: string;
@@ -51,7 +60,7 @@ export type JobState = {
   globalError: JobError | null;
 
   // Connection state
-  connectionStatus: 'connected' | 'disconnected' | 'connecting' | 'error';
+  connectionStatus: "connected" | "disconnected" | "connecting" | "error";
 
   // Completion state
   completionToast: {
@@ -64,20 +73,20 @@ export type JobState = {
 
 // Action types
 type JobAction =
-  | { type: 'SET_ACTIVE_JOB'; jobId: string | null }
-  | { type: 'CREATE_JOB'; job: Omit<Job, 'progress'> }
-  | { type: 'UPDATE_JOB_STATUS'; jobId: string; status: JobStatus }
-  | { type: 'UPDATE_JOB_PROGRESS'; jobId: string; progress: Partial<JobProgress> }
-  | { type: 'SET_JOB_ERROR'; jobId: string; error: JobError }
-  | { type: 'CLEAR_JOB_ERROR'; jobId: string }
-  | { type: 'SET_LOADING'; loading: boolean; message?: string }
-  | { type: 'SET_GLOBAL_ERROR'; error: JobError | null }
-  | { type: 'SET_CONNECTION_STATUS'; status: JobState['connectionStatus'] }
-  | { type: 'SHOW_COMPLETION_TOAST'; jobId: string; message: string }
-  | { type: 'HIDE_COMPLETION_TOAST' }
-  | { type: 'UPDATE_JOB_SLIDES'; jobId: string; slides: any[] }
-  | { type: 'UPDATE_JOB_EXPORTS'; jobId: string; exports: any[] }
-  | { type: 'CLEAR_JOB'; jobId: string };
+  | { type: "SET_ACTIVE_JOB"; jobId: string | null }
+  | { type: "CREATE_JOB"; job: Omit<Job, "progress"> }
+  | { type: "UPDATE_JOB_STATUS"; jobId: string; status: JobStatus }
+  | { type: "UPDATE_JOB_PROGRESS"; jobId: string; progress: Partial<JobProgress> }
+  | { type: "SET_JOB_ERROR"; jobId: string; error: JobError }
+  | { type: "CLEAR_JOB_ERROR"; jobId: string }
+  | { type: "SET_LOADING"; loading: boolean; message?: string }
+  | { type: "SET_GLOBAL_ERROR"; error: JobError | null }
+  | { type: "SET_CONNECTION_STATUS"; status: JobState["connectionStatus"] }
+  | { type: "SHOW_COMPLETION_TOAST"; jobId: string; message: string }
+  | { type: "HIDE_COMPLETION_TOAST" }
+  | { type: "UPDATE_JOB_SLIDES"; jobId: string; slides: any[] }
+  | { type: "UPDATE_JOB_EXPORTS"; jobId: string; exports: any[] }
+  | { type: "CLEAR_JOB"; jobId: string };
 
 // Initial state
 const initialState: JobState = {
@@ -85,25 +94,25 @@ const initialState: JobState = {
   jobs: {},
   loading: false,
   globalError: null,
-  connectionStatus: 'disconnected',
+  connectionStatus: "disconnected",
   completionToast: null,
 };
 
 // Reducer
 function jobReducer(state: JobState, action: JobAction): JobState {
   switch (action.type) {
-    case 'SET_ACTIVE_JOB':
+    case "SET_ACTIVE_JOB":
       return { ...state, activeJobId: action.jobId };
 
-    case 'CREATE_JOB':
+    case "CREATE_JOB":
       const newJob: Job = {
         ...action.job,
         progress: {
           currentSlide: 0,
           totalSlides: 0,
-          currentOperation: 'Initializing',
+          currentOperation: "Initializing",
           progress: 0,
-          stage: 'starting',
+          stage: "starting",
         },
       };
       return {
@@ -116,7 +125,7 @@ function jobReducer(state: JobState, action: JobAction): JobState {
         globalError: null,
       };
 
-    case 'UPDATE_JOB_STATUS':
+    case "UPDATE_JOB_STATUS":
       const jobToUpdate = state.jobs[action.jobId];
       if (!jobToUpdate) return state;
 
@@ -127,12 +136,12 @@ function jobReducer(state: JobState, action: JobAction): JobState {
           [action.jobId]: {
             ...jobToUpdate,
             status: action.status,
-            completedAt: action.status === 'completed' ? new Date() : jobToUpdate.completedAt,
+            completedAt: action.status === "completed" ? new Date() : jobToUpdate.completedAt,
           },
         },
       };
 
-    case 'UPDATE_JOB_PROGRESS':
+    case "UPDATE_JOB_PROGRESS":
       const existingJob = state.jobs[action.jobId];
       if (!existingJob) return state;
 
@@ -150,7 +159,7 @@ function jobReducer(state: JobState, action: JobAction): JobState {
         },
       };
 
-    case 'SET_JOB_ERROR':
+    case "SET_JOB_ERROR":
       const errorJob = state.jobs[action.jobId];
       if (!errorJob) return state;
 
@@ -160,13 +169,13 @@ function jobReducer(state: JobState, action: JobAction): JobState {
           ...state.jobs,
           [action.jobId]: {
             ...errorJob,
-            status: 'failed',
+            status: "failed",
             error: action.error,
           },
         },
       };
 
-    case 'CLEAR_JOB_ERROR':
+    case "CLEAR_JOB_ERROR":
       const clearJob = state.jobs[action.jobId];
       if (!clearJob) return state;
 
@@ -177,31 +186,31 @@ function jobReducer(state: JobState, action: JobAction): JobState {
           [action.jobId]: {
             ...clearJob,
             error: null,
-            status: clearJob.status === 'failed' ? 'idle' : clearJob.status,
+            status: clearJob.status === "failed" ? "idle" : clearJob.status,
           },
         },
       };
 
-    case 'SET_LOADING':
+    case "SET_LOADING":
       return {
         ...state,
         loading: action.loading,
         loadingMessage: action.message,
       };
 
-    case 'SET_GLOBAL_ERROR':
+    case "SET_GLOBAL_ERROR":
       return {
         ...state,
         globalError: action.error,
       };
 
-    case 'SET_CONNECTION_STATUS':
+    case "SET_CONNECTION_STATUS":
       return {
         ...state,
         connectionStatus: action.status,
       };
 
-    case 'SHOW_COMPLETION_TOAST':
+    case "SHOW_COMPLETION_TOAST":
       return {
         ...state,
         completionToast: {
@@ -212,13 +221,13 @@ function jobReducer(state: JobState, action: JobAction): JobState {
         },
       };
 
-    case 'HIDE_COMPLETION_TOAST':
+    case "HIDE_COMPLETION_TOAST":
       return {
         ...state,
         completionToast: null,
       };
 
-    case 'UPDATE_JOB_SLIDES':
+    case "UPDATE_JOB_SLIDES":
       const slidesJob = state.jobs[action.jobId];
       if (!slidesJob) return state;
 
@@ -233,7 +242,7 @@ function jobReducer(state: JobState, action: JobAction): JobState {
         },
       };
 
-    case 'UPDATE_JOB_EXPORTS':
+    case "UPDATE_JOB_EXPORTS":
       const exportsJob = state.jobs[action.jobId];
       if (!exportsJob) return state;
 
@@ -248,7 +257,7 @@ function jobReducer(state: JobState, action: JobAction): JobState {
         },
       };
 
-    case 'CLEAR_JOB':
+    case "CLEAR_JOB":
       const { [action.jobId]: removedJob, ...remainingJobs } = state.jobs;
       return {
         ...state,
@@ -275,25 +284,21 @@ export function JobProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (state.completionToast?.visible) {
       const timer = setTimeout(() => {
-        dispatch({ type: 'HIDE_COMPLETION_TOAST' });
+        dispatch({ type: "HIDE_COMPLETION_TOAST" });
       }, 10000);
 
       return () => clearTimeout(timer);
     }
   }, [state.completionToast]);
 
-  return React.createElement(
-    JobContext.Provider,
-    { value: { state, dispatch } },
-    children
-  );
+  return React.createElement(JobContext.Provider, { value: { state, dispatch } }, children);
 }
 
 // Hook
 export function useJobState() {
   const context = useContext(JobContext);
   if (!context) {
-    throw new Error('useJobState must be used within a JobProvider');
+    throw new Error("useJobState must be used within a JobProvider");
   }
   return context;
 }
@@ -312,44 +317,71 @@ export function useJob(jobId: string): Job | null {
 export function useJobActions() {
   const { dispatch } = useJobState();
 
-  const createJob = useCallback((jobData: Omit<Job, 'progress' | 'error'>) => {
-    dispatch({ type: 'CREATE_JOB', job: jobData });
-  }, [dispatch]);
+  const createJob = useCallback(
+    (jobData: Omit<Job, "progress" | "error">) => {
+      dispatch({ type: "CREATE_JOB", job: jobData });
+    },
+    [dispatch]
+  );
 
-  const updateJobStatus = useCallback((jobId: string, status: JobStatus) => {
-    dispatch({ type: 'UPDATE_JOB_STATUS', jobId, status });
-  }, [dispatch]);
+  const updateJobStatus = useCallback(
+    (jobId: string, status: JobStatus) => {
+      dispatch({ type: "UPDATE_JOB_STATUS", jobId, status });
+    },
+    [dispatch]
+  );
 
-  const updateJobProgress = useCallback((jobId: string, progress: Partial<JobProgress>) => {
-    dispatch({ type: 'UPDATE_JOB_PROGRESS', jobId, progress });
-  }, [dispatch]);
+  const updateJobProgress = useCallback(
+    (jobId: string, progress: Partial<JobProgress>) => {
+      dispatch({ type: "UPDATE_JOB_PROGRESS", jobId, progress });
+    },
+    [dispatch]
+  );
 
-  const setJobError = useCallback((jobId: string, error: JobError) => {
-    dispatch({ type: 'SET_JOB_ERROR', jobId, error });
-  }, [dispatch]);
+  const setJobError = useCallback(
+    (jobId: string, error: JobError) => {
+      dispatch({ type: "SET_JOB_ERROR", jobId, error });
+    },
+    [dispatch]
+  );
 
-  const clearJobError = useCallback((jobId: string) => {
-    dispatch({ type: 'CLEAR_JOB_ERROR', jobId });
-  }, [dispatch]);
+  const clearJobError = useCallback(
+    (jobId: string) => {
+      dispatch({ type: "CLEAR_JOB_ERROR", jobId });
+    },
+    [dispatch]
+  );
 
-  const setLoading = useCallback((loading: boolean, message?: string) => {
-    dispatch({ type: 'SET_LOADING', loading, message });
-  }, [dispatch]);
+  const setLoading = useCallback(
+    (loading: boolean, message?: string) => {
+      dispatch({ type: "SET_LOADING", loading, message });
+    },
+    [dispatch]
+  );
 
-  const setActiveJob = useCallback((jobId: string | null) => {
-    dispatch({ type: 'SET_ACTIVE_JOB', jobId });
-  }, [dispatch]);
+  const setActiveJob = useCallback(
+    (jobId: string | null) => {
+      dispatch({ type: "SET_ACTIVE_JOB", jobId });
+    },
+    [dispatch]
+  );
 
-  const clearJob = useCallback((jobId: string) => {
-    dispatch({ type: 'CLEAR_JOB', jobId });
-  }, [dispatch]);
+  const clearJob = useCallback(
+    (jobId: string) => {
+      dispatch({ type: "CLEAR_JOB", jobId });
+    },
+    [dispatch]
+  );
 
-  const showCompletionToast = useCallback((jobId: string, message: string) => {
-    dispatch({ type: 'SHOW_COMPLETION_TOAST', jobId, message });
-  }, [dispatch]);
+  const showCompletionToast = useCallback(
+    (jobId: string, message: string) => {
+      dispatch({ type: "SHOW_COMPLETION_TOAST", jobId, message });
+    },
+    [dispatch]
+  );
 
   const hideCompletionToast = useCallback(() => {
-    dispatch({ type: 'HIDE_COMPLETION_TOAST' });
+    dispatch({ type: "HIDE_COMPLETION_TOAST" });
   }, [dispatch]);
 
   return {
@@ -381,23 +413,25 @@ export class JobErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('JobErrorBoundary caught an error:', error, errorInfo);
+    console.error("JobErrorBoundary caught an error:", error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
-      return this.props.fallback || (
-        <div className="job-error-boundary">
-          <h3>Something went wrong</h3>
-          <p>We encountered an error while processing your job.</p>
-          <details>
-            <summary>Error details</summary>
-            <pre>{this.state.error?.message}</pre>
-          </details>
-          <button onClick={() => this.setState({ hasError: false, error: null })}>
-            Try again
-          </button>
-        </div>
+      return (
+        this.props.fallback || (
+          <div className="job-error-boundary">
+            <h3>Something went wrong</h3>
+            <p>We encountered an error while processing your job.</p>
+            <details>
+              <summary>Error details</summary>
+              <pre>{this.state.error?.message}</pre>
+            </details>
+            <button onClick={() => this.setState({ hasError: false, error: null })}>
+              Try again
+            </button>
+          </div>
+        )
       );
     }
 

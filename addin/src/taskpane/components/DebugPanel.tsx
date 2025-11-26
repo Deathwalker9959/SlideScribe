@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Button } from '@ui/button';
-import { Textarea } from '@ui/textarea';
+import React, { useEffect, useRef, useState } from "react";
+import { Button } from "@ui/button";
+import { Textarea } from "@ui/textarea";
 import {
   Bug,
   FileText,
@@ -16,7 +16,7 @@ import {
   Activity,
   Plug,
   Plug2,
-} from 'lucide-react';
+} from "lucide-react";
 
 /* global PowerPoint, Office */
 
@@ -25,8 +25,8 @@ interface SlideContent {
   title: string;
   text: string;
   shapes: number;
-  layout: 'title-only' | 'title-and-content' | 'complex';
-  categories: Array<{ type: 'title' | 'bullet' | 'body'; text: string }>;
+  layout: "title-only" | "title-and-content" | "complex";
+  categories: Array<{ type: "title" | "bullet" | "body"; text: string }>;
 }
 
 interface ImageData {
@@ -39,20 +39,24 @@ interface ImageData {
   name?: string;
 }
 
-const SAMPLE_PREVIEW_TEXT = 'This is a debug narration preview.';
+const SAMPLE_PREVIEW_TEXT = "This is a debug narration preview.";
 
 export function DebugPanel() {
   const [slideContent, setSlideContent] = useState<SlideContent[]>([]);
   const [images, setImages] = useState<ImageData[]>([]);
-  const [apiEndpoint, setApiEndpoint] = useState('http://localhost:5000/api/analyze');
-  const [apiResponse, setApiResponse] = useState<string>('');
+  const [apiEndpoint, setApiEndpoint] = useState(
+    "http://localhost:8000/api/v1/narration/process-presentation"
+  );
+  const [apiResponse, setApiResponse] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState<string>("");
   const [copied, setCopied] = useState(false);
-  const [jobId, setJobId] = useState('');
+  const [jobId, setJobId] = useState("");
   const [jobStatus, setJobStatus] = useState<any>(null);
   const [progressEvents, setProgressEvents] = useState<string[]>([]);
-  const [socketStatus, setSocketStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
+  const [socketStatus, setSocketStatus] = useState<
+    "disconnected" | "connecting" | "connected" | "error"
+  >("disconnected");
   const progressSocketRef = useRef<WebSocket | null>(null);
   const clientIdRef = useRef(`debug-panel-${Math.random().toString(36).slice(2, 8)}`);
 
@@ -64,25 +68,26 @@ export function DebugPanel() {
 
   const buildBackendUrl = (path: string) => {
     try {
-      const base = window.__SLIDESCRIBE_BACKEND_URL__ ?? window.location.origin ?? 'http://localhost:8000';
+      const base =
+        window.__SLIDESCRIBE_BACKEND_URL__ ?? window.location.origin ?? "http://localhost:8000";
       const url = new URL(base, window.location.href);
-      url.pathname = `${url.pathname.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
+      url.pathname = `${url.pathname.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
       return url.toString();
     } catch (err) {
-      console.warn('Unable to build backend URL', err);
+      console.warn("Unable to build backend URL", err);
       return `http://localhost:8000${path}`;
     }
   };
 
   const buildProgressSocketUrl = (job: string) => {
-    const base = window.__SLIDESCRIBE_PROGRESS_WS__ ?? buildBackendUrl('/ws/progress');
+    const base = window.__SLIDESCRIBE_PROGRESS_WS__ ?? buildBackendUrl("/ws/progress");
     const wsUrl = new URL(base, window.location.href);
-    if (wsUrl.protocol.startsWith('http')) {
-      wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+    if (wsUrl.protocol.startsWith("http")) {
+      wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
     }
-    wsUrl.searchParams.set('client_id', clientIdRef.current);
+    wsUrl.searchParams.set("client_id", clientIdRef.current);
     if (job) {
-      wsUrl.searchParams.set('job_id', job);
+      wsUrl.searchParams.set("job_id", job);
     }
     return wsUrl.toString();
   };
@@ -93,11 +98,11 @@ export function DebugPanel() {
 
   const extractSlideText = async () => {
     setIsLoading(true);
-    setError('');
+    setError("");
     try {
       await PowerPoint.run(async (context) => {
         const slides = context.presentation.slides;
-        slides.load('items');
+        slides.load("items");
         await context.sync();
 
         const slideData: SlideContent[] = [];
@@ -105,30 +110,37 @@ export function DebugPanel() {
         for (let i = 0; i < slides.items.length; i++) {
           const slide = slides.items[i];
           const shapes = slide.shapes;
-          shapes.load('items/type,items/name,items/width,items/height,items/textFrame/hasText,items/textFrame/textRange/text');
+          shapes.load(
+            "items/type,items/name,items/width,items/height,items/textFrame/hasText,items/textFrame/textRange/text"
+          );
           await context.sync();
 
-          let slideText = '';
-          let title = '';
-          const categories: SlideContent['categories'] = [];
+          let slideText = "";
+          let title = "";
+          const categories: SlideContent["categories"] = [];
 
           shapes.items.forEach((shape, index) => {
             const hasText = shape.textFrame?.hasText;
-            const text = hasText ? shape.textFrame!.textRange!.text.trim() : '';
+            const text = hasText ? shape.textFrame!.textRange!.text.trim() : "";
             if (!text) {
               return;
             }
 
             if (!title && index === 0) {
               title = text;
-              categories.push({ type: 'title', text });
+              categories.push({ type: "title", text });
             } else {
               slideText += `${text}\n`;
-              categories.push({ type: /^[-•*]/.test(text) ? 'bullet' : 'body', text });
+              categories.push({ type: /^[-•*]/.test(text) ? "bullet" : "body", text });
             }
           });
 
-          const layout: SlideContent['layout'] = shapes.items.length <= 2 ? 'title-only' : shapes.items.length <= 6 ? 'title-and-content' : 'complex';
+          const layout: SlideContent["layout"] =
+            shapes.items.length <= 2
+              ? "title-only"
+              : shapes.items.length <= 6
+                ? "title-and-content"
+                : "complex";
 
           slideData.push({
             slideNumber: i + 1,
@@ -144,7 +156,7 @@ export function DebugPanel() {
       });
     } catch (err) {
       setError(`Error extracting text: ${err instanceof Error ? err.message : String(err)}`);
-      console.error('Error extracting slide text:', err);
+      console.error("Error extracting slide text:", err);
     } finally {
       setIsLoading(false);
     }
@@ -152,11 +164,11 @@ export function DebugPanel() {
 
   const extractImages = async () => {
     setIsLoading(true);
-    setError('');
+    setError("");
     try {
       await PowerPoint.run(async (context) => {
         const slides = context.presentation.slides;
-        slides.load('items');
+        slides.load("items");
         await context.sync();
 
         const imageData: ImageData[] = [];
@@ -164,18 +176,18 @@ export function DebugPanel() {
         for (let i = 0; i < slides.items.length; i++) {
           const slide = slides.items[i];
           const shapes = slide.shapes;
-          shapes.load('items/type,items/name,items/width,items/height');
+          shapes.load("items/type,items/name,items/width,items/height");
           await context.sync();
 
           let imageCount = 0;
           shapes.items.forEach((shape) => {
-            if (shape.type === 'Image') {
+            if (shape.type === "Image") {
               imageCount += 1;
               imageData.push({
                 slideNumber: i + 1,
                 imageIndex: imageCount,
-                base64: 'placeholder-base64-data',
-                format: 'png',
+                base64: "placeholder-base64-data",
+                format: "png",
                 width: shape.width,
                 height: shape.height,
                 name: shape.name,
@@ -186,12 +198,14 @@ export function DebugPanel() {
 
         setImages(imageData);
         if (imageData.length === 0) {
-          setError('No images found in presentation. Note: image extraction has limited support in Office.js.');
+          setError(
+            "No images found in presentation. Note: image extraction has limited support in Office.js."
+          );
         }
       });
     } catch (err) {
       setError(`Error extracting images: ${err instanceof Error ? err.message : String(err)}`);
-      console.error('Error extracting images:', err);
+      console.error("Error extracting images:", err);
     } finally {
       setIsLoading(false);
     }
@@ -199,13 +213,13 @@ export function DebugPanel() {
 
   const sendToBackend = async () => {
     if (!apiEndpoint) {
-      setError('Please enter an API endpoint');
+      setError("Please enter an API endpoint");
       return;
     }
 
     setIsLoading(true);
-    setError('');
-    setApiResponse('');
+    setError("");
+    setApiResponse("");
 
     try {
       const payload = {
@@ -215,8 +229,8 @@ export function DebugPanel() {
       };
 
       const response = await fetch(apiEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -228,7 +242,7 @@ export function DebugPanel() {
       setApiResponse(JSON.stringify(data, null, 2));
     } catch (err) {
       setError(`API Error: ${err instanceof Error ? err.message : String(err)}`);
-      console.error('Error sending to backend:', err);
+      console.error("Error sending to backend:", err);
     } finally {
       setIsLoading(false);
     }
@@ -248,9 +262,9 @@ export function DebugPanel() {
       timestamp: new Date().toISOString(),
     };
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = `slide-debug-${Date.now()}.json`;
     document.body.appendChild(a);
@@ -260,44 +274,49 @@ export function DebugPanel() {
   };
 
   const startNarrationJob = async () => {
-    setError('');
+    setError("");
     setIsLoading(true);
     try {
-      const slidesPayload = (slideContent.length ? slideContent : [
-        {
-          slideNumber: 1,
-          title: 'Debug Slide',
-          text: 'Sample narration content.',
-          shapes: 1,
-          layout: 'title-only',
-          categories: [{ type: 'body', text: 'Sample narration content.' }],
-        },
-      ]).map((slide) => ({
+      const slidesPayload = (
+        slideContent.length
+          ? slideContent
+          : [
+              {
+                slideNumber: 1,
+                title: "Debug Slide",
+                text: "Sample narration content.",
+                shapes: 1,
+                layout: "title-only",
+                categories: [{ type: "body", text: "Sample narration content." }],
+              },
+            ]
+      ).map((slide) => ({
         slide_id: `debug-${slide.slideNumber}`,
         title: slide.title,
         content: slide.text,
         notes: null,
       }));
 
-      const response = await fetch(buildBackendUrl('/api/v1/narration/process-presentation'), {
-        method: 'POST',
+      const response = await fetch(buildBackendUrl("/api/v1/narration/process-presentation"), {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer test_token',
+          "Content-Type": "application/json",
+          Authorization:
+            "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXZ1c2VyIn0.ifRuBeF3666cOR6oELX3NP1Z5RnCyk_Oe0J8yvqPCE4",
         },
         body: JSON.stringify({
           slides: slidesPayload,
           settings: {
-            provider: 'azure',
-            voice: 'en-US-AriaNeural',
+            provider: "azure",
+            voice: "en-US-AriaNeural",
             speed: 1.0,
             pitch: 0,
             volume: 1.0,
-            tone: 'professional',
-            language: 'en-US',
+            tone: "professional",
+            language: "en-US",
           },
           metadata: {
-            source: 'debug-panel',
+            source: "debug-panel",
             requested_at: new Date().toISOString(),
           },
         }),
@@ -308,12 +327,12 @@ export function DebugPanel() {
       }
 
       const data = await response.json();
-      setJobId(data.job_id ?? '');
+      setJobId(data.job_id ?? "");
       setJobStatus(data);
       appendProgressEvent(`Started job ${data.job_id}`);
     } catch (err) {
       setError(`Narration API error: ${err instanceof Error ? err.message : String(err)}`);
-      console.error('Narration job error:', err);
+      console.error("Narration job error:", err);
     } finally {
       setIsLoading(false);
     }
@@ -321,13 +340,16 @@ export function DebugPanel() {
 
   const checkJobStatus = async () => {
     if (!jobId) {
-      setError('No job ID set. Start a job first.');
+      setError("No job ID set. Start a job first.");
       return;
     }
 
     try {
       const response = await fetch(buildBackendUrl(`/api/v1/narration/status/${jobId}`), {
-        headers: { Authorization: 'Bearer test_token' },
+        headers: {
+          Authorization:
+            "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXZ1c2VyIn0.ifRuBeF3666cOR6oELX3NP1Z5RnCyk_Oe0J8yvqPCE4",
+        },
       });
       if (!response.ok) {
         throw new Error(`Status check failed (${response.status})`);
@@ -337,26 +359,26 @@ export function DebugPanel() {
       appendProgressEvent(`Status update: ${JSON.stringify(data.status ?? data)}`);
     } catch (err) {
       setError(`Status error: ${err instanceof Error ? err.message : String(err)}`);
-      console.error('Status check error', err);
+      console.error("Status check error", err);
     }
   };
 
   const connectProgressSocket = () => {
     if (!jobId) {
-      setError('Enter a job ID before connecting to progress updates.');
+      setError("Enter a job ID before connecting to progress updates.");
       return;
     }
 
     try {
-      setSocketStatus('connecting');
+      setSocketStatus("connecting");
       const wsUrl = buildProgressSocketUrl(jobId);
       const socket = new WebSocket(wsUrl);
       progressSocketRef.current = socket;
 
       socket.onopen = () => {
-        setSocketStatus('connected');
-        socket.send(JSON.stringify({ action: 'subscribe', job_id: jobId }));
-        appendProgressEvent('WebSocket connected');
+        setSocketStatus("connected");
+        socket.send(JSON.stringify({ action: "subscribe", job_id: jobId }));
+        appendProgressEvent("WebSocket connected");
       };
 
       socket.onmessage = (event) => {
@@ -364,29 +386,32 @@ export function DebugPanel() {
       };
 
       socket.onerror = () => {
-        setSocketStatus('error');
-        appendProgressEvent('WebSocket error');
+        setSocketStatus("error");
+        appendProgressEvent("WebSocket error");
       };
 
       socket.onclose = () => {
-        setSocketStatus('disconnected');
-        appendProgressEvent('WebSocket disconnected');
+        setSocketStatus("disconnected");
+        appendProgressEvent("WebSocket disconnected");
       };
     } catch (err) {
-      console.error('WebSocket connection error', err);
-      setSocketStatus('error');
+      console.error("WebSocket connection error", err);
+      setSocketStatus("error");
     }
   };
 
   const disconnectProgressSocket = () => {
     progressSocketRef.current?.close();
     progressSocketRef.current = null;
-    setSocketStatus('disconnected');
+    setSocketStatus("disconnected");
   };
 
-  useEffect(() => () => {
-    disconnectProgressSocket();
-  }, []);
+  useEffect(
+    () => () => {
+      disconnectProgressSocket();
+    },
+    []
+  );
 
   return (
     <div className="debug-panel">
@@ -412,9 +437,14 @@ export function DebugPanel() {
 
         {showTextSection && (
           <div className="debug-section-content">
-            <Button onClick={extractSlideText} disabled={isLoading} className="debug-action-btn" size="sm">
+            <Button
+              onClick={extractSlideText}
+              disabled={isLoading}
+              className="debug-action-btn"
+              size="sm"
+            >
               <FileText className="debug-btn-icon" />
-              {isLoading ? 'Extracting...' : 'Extract All Slide Text'}
+              {isLoading ? "Extracting..." : "Extract All Slide Text"}
             </Button>
 
             {slideContent.length > 0 && (
@@ -428,7 +458,9 @@ export function DebugPanel() {
                     <div key={slide.slideNumber} className="debug-slide-item">
                       <div className="debug-slide-header">
                         <strong>Slide {slide.slideNumber}</strong>
-                        <span className="debug-slide-meta">{slide.shapes} shapes · {slide.layout}</span>
+                        <span className="debug-slide-meta">
+                          {slide.shapes} shapes · {slide.layout}
+                        </span>
                       </div>
                       <div className="debug-slide-title">{slide.title}</div>
                       {slide.text && <pre className="debug-code-block">{slide.text}</pre>}
@@ -436,7 +468,9 @@ export function DebugPanel() {
                         <ul className="debug-slide-list">
                           {slide.categories.map((entry, idx) => (
                             <li key={idx}>
-                              <span className={`debug-chip debug-chip--${entry.type}`}>{entry.type}</span>
+                              <span className={`debug-chip debug-chip--${entry.type}`}>
+                                {entry.type}
+                              </span>
                               {entry.text}
                             </li>
                           ))}
@@ -447,9 +481,17 @@ export function DebugPanel() {
                 </div>
 
                 <div className="debug-actions">
-                  <Button onClick={() => copyToClipboard(JSON.stringify(slideContent, null, 2))} variant="outline" size="sm">
-                    {copied ? <CheckCircle className="debug-btn-icon" /> : <Copy className="debug-btn-icon" />}
-                    {copied ? 'Copied!' : 'Copy JSON'}
+                  <Button
+                    onClick={() => copyToClipboard(JSON.stringify(slideContent, null, 2))}
+                    variant="outline"
+                    size="sm"
+                  >
+                    {copied ? (
+                      <CheckCircle className="debug-btn-icon" />
+                    ) : (
+                      <Copy className="debug-btn-icon" />
+                    )}
+                    {copied ? "Copied!" : "Copy JSON"}
                   </Button>
                 </div>
               </>
@@ -460,7 +502,10 @@ export function DebugPanel() {
 
       {/* Image Extraction Section */}
       <div className="debug-section">
-        <div className="debug-section-header" onClick={() => setShowImageSection(!showImageSection)}>
+        <div
+          className="debug-section-header"
+          onClick={() => setShowImageSection(!showImageSection)}
+        >
           {showImageSection ? <ChevronDown /> : <ChevronRight />}
           <ImageIcon className="debug-section-icon" />
           <span>Image Extraction</span>
@@ -468,9 +513,14 @@ export function DebugPanel() {
 
         {showImageSection && (
           <div className="debug-section-content">
-            <Button onClick={extractImages} disabled={isLoading} className="debug-action-btn" size="sm">
+            <Button
+              onClick={extractImages}
+              disabled={isLoading}
+              className="debug-action-btn"
+              size="sm"
+            >
               <ImageIcon className="debug-btn-icon" />
-              {isLoading ? 'Extracting...' : 'Extract Images'}
+              {isLoading ? "Extracting..." : "Extract Images"}
             </Button>
 
             {images.length > 0 && (
@@ -483,14 +533,22 @@ export function DebugPanel() {
                   {images.map((img) => (
                     <div key={`${img.slideNumber}-${img.imageIndex}`} className="debug-image-item">
                       <div className="debug-image-header">
-                        <strong>Slide {img.slideNumber} · Image {img.imageIndex}</strong>
+                        <strong>
+                          Slide {img.slideNumber} · Image {img.imageIndex}
+                        </strong>
                         <span className="debug-image-meta">{img.format}</span>
                       </div>
                       <div className="debug-image-meta-list">
                         {img.name && <span>Name: {img.name}</span>}
-                        {img.width && img.height && <span>{Math.round(img.width)} × {Math.round(img.height)} px</span>}
+                        {img.width && img.height && (
+                          <span>
+                            {Math.round(img.width)} × {Math.round(img.height)} px
+                          </span>
+                        )}
                       </div>
-                      <div className="debug-image-placeholder">Image data available (base64 placeholder)</div>
+                      <div className="debug-image-placeholder">
+                        Image data available (base64 placeholder)
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -515,7 +573,7 @@ export function DebugPanel() {
               <Textarea
                 value={apiEndpoint}
                 onChange={(e) => setApiEndpoint(e.target.value)}
-                placeholder="http://localhost:5000/api/analyze"
+                placeholder="http://localhost:8000/api/v1/narration/process-presentation"
                 className="debug-input"
                 rows={2}
               />
@@ -529,10 +587,15 @@ export function DebugPanel() {
                 size="sm"
               >
                 <Send className="debug-btn-icon" />
-                {isLoading ? 'Sending...' : 'Send to Backend'}
+                {isLoading ? "Sending..." : "Send to Backend"}
               </Button>
 
-              <Button onClick={downloadAsJson} disabled={slideContent.length === 0 && images.length === 0} variant="outline" size="sm">
+              <Button
+                onClick={downloadAsJson}
+                disabled={slideContent.length === 0 && images.length === 0}
+                variant="outline"
+                size="sm"
+              >
                 <Download className="debug-btn-icon" />
                 Download JSON
               </Button>
@@ -555,7 +618,10 @@ export function DebugPanel() {
 
       {/* Narration Job Section */}
       <div className="debug-section">
-        <div className="debug-section-header" onClick={() => setShowNarrationSection(!showNarrationSection)}>
+        <div
+          className="debug-section-header"
+          onClick={() => setShowNarrationSection(!showNarrationSection)}
+        >
           {showNarrationSection ? <ChevronDown /> : <ChevronRight />}
           <Zap className="debug-section-icon" />
           <span>Narration Job Testing</span>
@@ -575,9 +641,14 @@ export function DebugPanel() {
             </div>
 
             <div className="debug-actions">
-              <Button onClick={startNarrationJob} disabled={isLoading} className="debug-action-btn" size="sm">
+              <Button
+                onClick={startNarrationJob}
+                disabled={isLoading}
+                className="debug-action-btn"
+                size="sm"
+              >
                 <Activity className="debug-btn-icon" />
-                {isLoading ? 'Starting...' : 'Start Narration Job'}
+                {isLoading ? "Starting..." : "Start Narration Job"}
               </Button>
               <Button onClick={checkJobStatus} disabled={!jobId} variant="outline" size="sm">
                 Check Status
@@ -598,7 +669,10 @@ export function DebugPanel() {
 
       {/* WebSocket Testing Section */}
       <div className="debug-section">
-        <div className="debug-section-header" onClick={() => setShowWebsocketSection(!showWebsocketSection)}>
+        <div
+          className="debug-section-header"
+          onClick={() => setShowWebsocketSection(!showWebsocketSection)}
+        >
           {showWebsocketSection ? <ChevronDown /> : <ChevronRight />}
           <Plug className="debug-section-icon" />
           <span>Progress WebSocket</span>
@@ -609,17 +683,24 @@ export function DebugPanel() {
             <div className="debug-actions">
               <Button
                 onClick={connectProgressSocket}
-                disabled={!jobId || socketStatus === 'connecting' || socketStatus === 'connected'}
+                disabled={!jobId || socketStatus === "connecting" || socketStatus === "connected"}
                 className="debug-action-btn"
                 size="sm"
               >
                 <Plug2 className="debug-btn-icon" />
-                {socketStatus === 'connecting' ? 'Connecting...' : 'Connect'}
+                {socketStatus === "connecting" ? "Connecting..." : "Connect"}
               </Button>
-              <Button onClick={disconnectProgressSocket} variant="outline" size="sm" disabled={socketStatus === 'disconnected'}>
+              <Button
+                onClick={disconnectProgressSocket}
+                variant="outline"
+                size="sm"
+                disabled={socketStatus === "disconnected"}
+              >
                 Disconnect
               </Button>
-              <span className={`debug-chip debug-chip--${socketStatus}`}>Status: {socketStatus}</span>
+              <span className={`debug-chip debug-chip--${socketStatus}`}>
+                Status: {socketStatus}
+              </span>
             </div>
 
             {progressEvents.length > 0 && (
@@ -628,7 +709,7 @@ export function DebugPanel() {
                   <span>Recent Events</span>
                 </div>
                 <pre className="debug-code-block debug-code-block--compact">
-                  {progressEvents.join('\n')}
+                  {progressEvents.join("\n")}
                 </pre>
               </div>
             )}

@@ -5,6 +5,7 @@ const devCerts = require("office-addin-dev-certs");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+const webpack = require("webpack");
 
 const urlDev = "https://localhost:3000/";
 const urlProd = "https://www.contoso.com/"; // CHANGE THIS TO YOUR PRODUCTION DEPLOYMENT LOCATION
@@ -13,6 +14,10 @@ async function getHttpsOptions() {
   const httpsOptions = await devCerts.getHttpsServerOptions();
   return { ca: httpsOptions.ca, key: httpsOptions.key, cert: httpsOptions.cert };
 }
+
+// Backend configuration from environment
+const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
+const wsUrl = process.env.WS_URL || 'ws://localhost:8000/ws/progress';
 
 module.exports = async (env, options) => {
   const dev = options.mode === "development";
@@ -32,7 +37,8 @@ module.exports = async (env, options) => {
         '@components': path.resolve(__dirname, 'src/taskpane/components'),
         '@ui': path.resolve(__dirname, 'src/taskpane/components/ui'),
         '@styles': path.resolve(__dirname, 'src/taskpane/styles'),
-        '@utils': path.resolve(__dirname, 'src/taskpane/utils')
+        '@utils': path.resolve(__dirname, 'src/taskpane/utils'),
+        '@state': path.resolve(__dirname, 'src/taskpane/state')
       }
     },
     module: {
@@ -68,6 +74,10 @@ module.exports = async (env, options) => {
     },
     plugins: [
       new MiniCssExtractPlugin({ filename: '[name].css' }),
+      new webpack.DefinePlugin({
+        'process.env.BACKEND_URL': JSON.stringify(process.env.BACKEND_URL || 'http://localhost:8000'),
+        'process.env.WS_URL': JSON.stringify(process.env.WS_URL || 'ws://localhost:8000/ws/progress'),
+      }),
       new HtmlWebpackPlugin({
         filename: "taskpane.html",
         template: "./src/taskpane/taskpane.html",

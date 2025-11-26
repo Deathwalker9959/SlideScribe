@@ -1,0 +1,87 @@
+####################################################
+# .NET / C# BUILD OUTPUT
+####################################################
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+*.dll
+*.exe
+*.app
+*.pdb
+*.cache/
+*.db
+*.mdb
+
+####################################################
+# VISUAL STUDIO / VS BUILD ARTIFACTS
+####################################################
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio generated files
+Generated\ Files/
+TestResults/
+[Tt]est[Rr]esults/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+*.nuget.props
+*.nuget.targets
+
+####################################################
+# ASP.NET / RUNTIME FILES
+####################################################
+appsettings.Development.json
+# Uncomment to ignore all sensitive env configs:
+# appsettings.*.json
+
+####################################################
+# NODE PROJECTS / FRONTEND (if using)
+####################################################
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+dist/
+temp/
+logs/
+
+####################################################
+# BUILD SYSTEMS
+####################################################
+*.log
+*.tmp
+*.temp
+*.pid
+
+####################################################
+# RESHARPER / RIDER / JETBRAINS
+####################################################
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+.idea/
+
+####################################################
+# OS-SPECIFIC FILES
+####################################################
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+####################################################
+# BACKUPS
+####################################################
+*.bak
+*~

@@ -25,6 +25,11 @@ class UserInDB(User):
     hashed_password: str
 
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against a bcrypt hash."""
     return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
@@ -80,6 +85,22 @@ router = APIRouter()
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Authenticate user and return JWT access token."""
     user = authenticate_user(db, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    token = create_access_token({"sub": user.username})
+    return {"access_token": token, "token_type": "bearer"}
+
+
+@router.post(
+    "/token-json",
+    tags=["Authentication"],
+    summary="User Login (JSON)",
+    description="Authenticate user credentials via JSON and receive JWT access token",
+    response_description="JWT access token for API authentication",
+)
+async def login_json(login_request: LoginRequest, db: Session = Depends(get_db)):
+    """Authenticate user and return JWT access token via JSON."""
+    user = authenticate_user(db, login_request.username, login_request.password)
     if not user:
         raise HTTPException(status_code=400, detail="Incorrect username or password")
     token = create_access_token({"sub": user.username})

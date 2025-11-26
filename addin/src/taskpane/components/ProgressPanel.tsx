@@ -1,15 +1,15 @@
-import React from 'react';
-import { Button } from '@ui/button';
-import { Card } from '@ui/card';
-import { Music, Download } from 'lucide-react';
-import { SlideAudioTimelineEntry, SlideAudioExport } from '@components/ScriptEditor';
+import React from "react";
+import { Button } from "@ui/button";
+import { Card } from "@ui/card";
+import { Music, Download } from "lucide-react";
+import { SlideAudioTimelineEntry, SlideAudioExport } from "@components/ScriptEditor";
 
 export type ConnectionStatus =
-  | 'disconnected'
-  | 'connecting'
-  | 'connected'
-  | 'reconnecting'
-  | 'error';
+  | "disconnected"
+  | "connecting"
+  | "connected"
+  | "reconnecting"
+  | "error";
 
 export interface ProgressSnapshot {
   jobId: string;
@@ -47,24 +47,24 @@ interface ProgressPanelProps {
 }
 
 const statusLabelMap: Record<ConnectionStatus, string> = {
-  disconnected: 'Disconnected',
-  connecting: 'Connecting',
-  connected: 'Connected',
-  reconnecting: 'Reconnecting',
-  error: 'Error',
+  disconnected: "Disconnected",
+  connecting: "Connecting",
+  connected: "Connected",
+  reconnecting: "Reconnecting",
+  error: "Error",
 };
 
 const statusDotClassMap: Record<ConnectionStatus, string> = {
-  disconnected: 'progress-panel__status-dot--offline',
-  connecting: 'progress-panel__status-dot--connecting',
-  connected: 'progress-panel__status-dot--online',
-  reconnecting: 'progress-panel__status-dot--connecting',
-  error: 'progress-panel__status-dot--error',
+  disconnected: "progress-panel__status-dot--offline",
+  connecting: "progress-panel__status-dot--connecting",
+  connected: "progress-panel__status-dot--online",
+  reconnecting: "progress-panel__status-dot--connecting",
+  error: "progress-panel__status-dot--error",
 };
 
 function formatDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) {
-    return 'Calculating…';
+    return "Calculating…";
   }
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = Math.floor(seconds % 60);
@@ -74,9 +74,9 @@ function formatDuration(seconds: number): string {
 function formatTimestamp(timestamp: string): string {
   try {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   } catch {
-    return '—';
+    return "—";
   }
 }
 
@@ -93,7 +93,7 @@ export function ProgressPanel({
 }: ProgressPanelProps) {
   const progressPercent = latestUpdate ? Math.round((latestUpdate.progress ?? 0) * 100) : 0;
   const canTrack = jobIdInput.trim().length > 0;
-  const isConnected = connectionStatus === 'connected';
+  const isConnected = connectionStatus === "connected";
 
   return (
     <div className="progress-panel">
@@ -129,18 +129,13 @@ export function ProgressPanel({
               onClick={onStartTracking}
               disabled={
                 !canTrack ||
-                connectionStatus === 'connecting' ||
-                connectionStatus === 'reconnecting'
+                connectionStatus === "connecting" ||
+                connectionStatus === "reconnecting"
               }
             >
-              {isConnected && activeJobId ? 'Switch Job' : 'Track Job'}
+              {isConnected && activeJobId ? "Switch Job" : "Track Job"}
             </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={onStopTracking}
-              disabled={!isConnected}
-            >
+            <Button size="sm" variant="secondary" onClick={onStopTracking} disabled={!isConnected}>
               Disconnect
             </Button>
           </div>
@@ -157,7 +152,7 @@ export function ProgressPanel({
           <div className="progress-panel__section-header">
             <h3>Current Status</h3>
             <span className="progress-panel__pill">
-              {activeJobId ? `Tracking ${activeJobId}` : 'No job selected'}
+              {activeJobId ? `Tracking ${activeJobId}` : "No job selected"}
             </span>
           </div>
 
@@ -217,32 +212,34 @@ export function ProgressPanel({
                 <div className="progress-panel__context-block">
                   <div className="progress-panel__context-header">
                     <h4>Latest Contextual Insights</h4>
-                    {typeof latestUpdate.contextConfidence === 'number' && (
+                    {typeof latestUpdate.contextConfidence === "number" && (
                       <span className="progress-panel__context-confidence">
                         Confidence {Math.round(latestUpdate.contextConfidence * 100)}%
                       </span>
                     )}
                   </div>
-                  {latestUpdate.contextualHighlights && latestUpdate.contextualHighlights.length > 0 && (
-                    <div className="progress-panel__context-section">
-                      <h5>Highlights</h5>
-                      <ul>
-                        {latestUpdate.contextualHighlights.map((highlight, index) => (
-                          <li key={`latest-highlight-${index}`}>{highlight}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {latestUpdate.contextualCallouts && latestUpdate.contextualCallouts.length > 0 && (
-                    <div className="progress-panel__context-section">
-                      <h5>Narration Callouts</h5>
-                      <ul>
-                        {latestUpdate.contextualCallouts.map((callout, index) => (
-                          <li key={`latest-callout-${index}`}>{callout}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  {latestUpdate.contextualHighlights &&
+                    latestUpdate.contextualHighlights.length > 0 && (
+                      <div className="progress-panel__context-section">
+                        <h5>Highlights</h5>
+                        <ul>
+                          {latestUpdate.contextualHighlights.map((highlight, index) => (
+                            <li key={`latest-highlight-${index}`}>{highlight}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  {latestUpdate.contextualCallouts &&
+                    latestUpdate.contextualCallouts.length > 0 && (
+                      <div className="progress-panel__context-section">
+                        <h5>Narration Callouts</h5>
+                        <ul>
+                          {latestUpdate.contextualCallouts.map((callout, index) => (
+                            <li key={`latest-callout-${index}`}>{callout}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   {latestUpdate.imageReferences && latestUpdate.imageReferences.length > 0 && (
                     <div className="progress-panel__context-section">
                       <h5>Visual References</h5>
@@ -261,8 +258,10 @@ export function ProgressPanel({
                       <ul>
                         {latestUpdate.audioTimeline.map((entry, index) => (
                           <li key={`latest-audio-${entry.slideId}-${index}`}>
-                            <span className="progress-panel__context-label">Start:</span> {entry.start.toFixed(1)}s ·
-                            <span className="progress-panel__context-label"> Duration:</span> {entry.duration.toFixed(1)}s
+                            <span className="progress-panel__context-label">Start:</span>{" "}
+                            {entry.start.toFixed(1)}s ·
+                            <span className="progress-panel__context-label"> Duration:</span>{" "}
+                            {entry.duration.toFixed(1)}s
                             {Number.isFinite(entry.end) && ` · Ends ${entry.end.toFixed(1)}s`}
                           </li>
                         ))}
@@ -291,7 +290,9 @@ export function ProgressPanel({
                       <ul>
                         {latestUpdate.audioExports.map((exportInfo, index) => (
                           <li key={`latest-export-${exportInfo.format}-${index}`}>
-                            <span className="progress-panel__context-label">{exportInfo.format.toUpperCase()}:</span>{' '}
+                            <span className="progress-panel__context-label">
+                              {exportInfo.format.toUpperCase()}:
+                            </span>{" "}
                             {exportInfo.resolvedUrl ? (
                               <a
                                 href={exportInfo.resolvedUrl}
@@ -299,21 +300,23 @@ export function ProgressPanel({
                                 target="_blank"
                                 rel="noopener noreferrer"
                               >
-                                {exportInfo.fileSize ? `${(exportInfo.fileSize / 1024 / 1024).toFixed(2)} MB` : 'Download'}
+                                {exportInfo.fileSize
+                                  ? `${(exportInfo.fileSize / 1024 / 1024).toFixed(2)} MB`
+                                  : "Download"}
                               </a>
                             ) : (
                               <span>
                                 {exportInfo.fileSize
                                   ? `${(exportInfo.fileSize / 1024 / 1024).toFixed(2)} MB`
-                                  : 'Ready'}
+                                  : "Ready"}
                               </span>
                             )}
                             {exportInfo.createdAt && (
                               <>
-                                {' · '}
+                                {" · "}
                                 {new Date(exportInfo.createdAt).toLocaleTimeString([], {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
+                                  hour: "2-digit",
+                                  minute: "2-digit",
                                 })}
                               </>
                             )}
@@ -327,14 +330,16 @@ export function ProgressPanel({
                       <div className="progress-panel__context-section">
                         <h5>Context Cues</h5>
                         <ul>
-                          {Object.entries(latestUpdate.contextualTransitions).map(([key, value]) => (
-                            <li key={`latest-transition-${key}`}>
-                              <span className="progress-panel__context-label">
-                                {key.replace(/_/g, ' ')}:
-                              </span>{' '}
-                              {value}
-                            </li>
-                          ))}
+                          {Object.entries(latestUpdate.contextualTransitions).map(
+                            ([key, value]) => (
+                              <li key={`latest-transition-${key}`}>
+                                <span className="progress-panel__context-label">
+                                  {key.replace(/_/g, " ")}:
+                                </span>{" "}
+                                {value}
+                              </li>
+                            )
+                          )}
                         </ul>
                       </div>
                     )}
@@ -359,8 +364,11 @@ export function ProgressPanel({
             <p className="progress-panel__empty">No progress updates received yet.</p>
           ) : (
             <div className="progress-panel__history">
-              {history.map((event) => (
-                <div key={`${event.jobId}-${event.receivedAt}-${event.progress}`} className="progress-panel__history-item">
+              {history.map((event, index) => (
+                <div
+                  key={`${event.jobId}-${event.receivedAt}-${event.progress}-${index}`}
+                  className="progress-panel__history-item"
+                >
                   <div className="progress-panel__history-header">
                     <span className="progress-panel__history-timestamp">
                       {formatTimestamp(event.receivedAt)}
@@ -378,11 +386,12 @@ export function ProgressPanel({
                   {(event.contextualHighlights?.length ||
                     event.contextualCallouts?.length ||
                     event.imageReferences?.length ||
-                    (event.contextualTransitions && Object.keys(event.contextualTransitions).length > 0) ||
+                    (event.contextualTransitions &&
+                      Object.keys(event.contextualTransitions).length > 0) ||
                     (event.audioTimeline && event.audioTimeline.length > 0) ||
                     (event.audioExports && event.audioExports.length > 0)) && (
                     <div className="progress-panel__history-context">
-                      {typeof event.contextConfidence === 'number' && (
+                      {typeof event.contextConfidence === "number" && (
                         <span className="progress-panel__history-confidence">
                           Confidence {Math.round(event.contextConfidence * 100)}%
                         </span>
@@ -390,14 +399,18 @@ export function ProgressPanel({
                       {event.contextualHighlights && event.contextualHighlights.length > 0 && (
                         <ul>
                           {event.contextualHighlights.map((highlight, index) => (
-                            <li key={`history-highlight-${event.receivedAt}-${index}`}>{highlight}</li>
+                            <li key={`history-highlight-${event.receivedAt}-${index}`}>
+                              {highlight}
+                            </li>
                           ))}
                         </ul>
                       )}
                       {event.imageReferences && event.imageReferences.length > 0 && (
                         <ul>
                           {event.imageReferences.map((reference, index) => (
-                            <li key={`history-image-ref-${event.receivedAt}-${index}`}>{reference}</li>
+                            <li key={`history-image-ref-${event.receivedAt}-${index}`}>
+                              {reference}
+                            </li>
                           ))}
                         </ul>
                       )}
@@ -412,9 +425,11 @@ export function ProgressPanel({
                         <ul>
                           {event.audioTimeline.map((entry, index) => (
                             <li key={`history-audio-${event.receivedAt}-${index}`}>
-                              <Music className="progress-panel__context-icon" />{' '}
-                              <span className="progress-panel__context-label">Start:</span> {entry.start.toFixed(1)}s ·
-                              <span className="progress-panel__context-label"> Duration:</span> {entry.duration.toFixed(1)}s
+                              <Music className="progress-panel__context-icon" />{" "}
+                              <span className="progress-panel__context-label">Start:</span>{" "}
+                              {entry.start.toFixed(1)}s ·
+                              <span className="progress-panel__context-label"> Duration:</span>{" "}
+                              {entry.duration.toFixed(1)}s
                               {Number.isFinite(entry.end) && ` · Ends ${entry.end.toFixed(1)}s`}
                             </li>
                           ))}
@@ -429,16 +444,19 @@ export function ProgressPanel({
                           {Number.isFinite(event.audioLoudnessDb ?? NaN) && (
                             <span>Loudness {event.audioLoudnessDb?.toFixed(1)} dBFS</span>
                           )}
-                          {event.audioBackgroundTrack && <span>Bed {event.audioBackgroundTrack}</span>}
+                          {event.audioBackgroundTrack && (
+                            <span>Bed {event.audioBackgroundTrack}</span>
+                          )}
                         </div>
                       )}
                       {event.audioExports && event.audioExports.length > 0 && (
                         <ul>
                           {event.audioExports.map((exportInfo, index) => (
                             <li key={`history-export-${event.receivedAt}-${index}`}>
-                              <Download className="progress-panel__context-icon" />{' '}
-                              <span className="progress-panel__context-label">{exportInfo.format.toUpperCase()}:</span>
-                              {' '}
+                              <Download className="progress-panel__context-icon" />{" "}
+                              <span className="progress-panel__context-label">
+                                {exportInfo.format.toUpperCase()}:
+                              </span>{" "}
                               {exportInfo.resolvedUrl ? (
                                 <a
                                   href={exportInfo.resolvedUrl}
@@ -446,13 +464,15 @@ export function ProgressPanel({
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
-                                  {exportInfo.fileSize ? `${(exportInfo.fileSize / 1024 / 1024).toFixed(2)} MB` : 'Download'}
+                                  {exportInfo.fileSize
+                                    ? `${(exportInfo.fileSize / 1024 / 1024).toFixed(2)} MB`
+                                    : "Download"}
                                 </a>
                               ) : (
                                 <span>
                                   {exportInfo.fileSize
                                     ? `${(exportInfo.fileSize / 1024 / 1024).toFixed(2)} MB`
-                                    : 'Ready'}
+                                    : "Ready"}
                                 </span>
                               )}
                             </li>
@@ -465,8 +485,8 @@ export function ProgressPanel({
                             {Object.entries(event.contextualTransitions).map(([key, value]) => (
                               <li key={`history-transition-${event.receivedAt}-${key}`}>
                                 <span className="progress-panel__context-label">
-                                  {key.replace(/_/g, ' ')}:
-                                </span>{' '}
+                                  {key.replace(/_/g, " ")}:
+                                </span>{" "}
                                 {value}
                               </li>
                             ))}

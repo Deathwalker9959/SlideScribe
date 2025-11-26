@@ -7,11 +7,13 @@ from uuid import uuid4
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from services.ai_refinement import app as ai_refinement_module
 from services.analytics.app import app as analytics_app
 from services.audio_processing.app import app as audio_processing_app
 from services.auth import router as auth_router
+from services.auth_service import router as auth_service_router
 from services.image_analysis import app as image_analysis_module
 from services.narration import app as narration_module
 from services.ssml_builder import app as ssml_builder_module
@@ -99,7 +101,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files for media serving
+app.mount("/media", StaticFiles(directory=config.get("media_root", "./media")), name="media")
+
 app.include_router(auth_router, tags=["Authentication"])
+app.include_router(auth_service_router, prefix="/api/v1/auth", tags=["Authentication"])
 
 # Routes to exclude (internal FastAPI docs routes)
 EXCLUDED_PATHS = {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
@@ -267,7 +273,13 @@ async def websocket_progress_endpoint(websocket: WebSocket):
     """WebSocket endpoint for narration progress updates."""
     client_id = websocket.query_params.get("client_id")
     assigned_client_id = await websocket_manager.connect(websocket, client_id)
-    await websocket.send_json({"event": "connected", "client_id": assigned_client_id})
+
+    try:
+        await websocket.send_json({"event": "connected", "client_id": assigned_client_id})
+    except Exception:
+        # If we can't send the initial message, just disconnect
+        await websocket_manager.disconnect(assigned_client_id)
+        return
 
     try:
         while True:
@@ -277,27 +289,51 @@ async def websocket_progress_endpoint(websocket: WebSocket):
             if action == "subscribe":
                 job_id = message.get("job_id")
                 if not job_id:
-                    await websocket.send_json(
-                        {"event": "error", "message": "Missing job_id for subscribe"}
-                    )
+                    try:
+                        await websocket.send_json(
+                            {"event": "error", "message": "Missing job_id for subscribe"}
+                        )
+                    except Exception:
+                        # Connection lost during send, break out
+                        break
                     continue
                 await websocket_manager.subscribe(assigned_client_id, job_id)
-                await websocket.send_json({"event": "subscribed", "job_id": job_id})
+                try:
+                    await websocket.send_json({"event": "subscribed", "job_id": job_id})
+                except Exception:
+                    # Connection lost during send, break out
+                    break
             elif action == "unsubscribe":
                 job_id = message.get("job_id")
                 await websocket_manager.unsubscribe(assigned_client_id, job_id)
-                await websocket.send_json({"event": "unsubscribed", "job_id": job_id})
+                try:
+                    await websocket.send_json({"event": "unsubscribed", "job_id": job_id})
+                except Exception:
+                    # Connection lost during send, break out
+                    break
             elif action == "ping":
-                await websocket.send_json({"event": "pong"})
+                try:
+                    await websocket.send_json({"event": "pong"})
+                except Exception:
+                    # Connection lost during send, break out
+                    break
             else:
-                await websocket.send_json(
-                    {"event": "error", "message": f"Unknown action: {action}"}
-                )
+                try:
+                    await websocket.send_json(
+                        {"event": "error", "message": f"Unknown action: {action}"}
+                    )
+                except Exception:
+                    # Connection lost during send, break out
+                    break
     except WebSocketDisconnect:
+        # Normal disconnect, clean up the connection
+        pass
+    except Exception as e:
+        # Log unexpected errors but don't re-raise to avoid crashing the server
+        logger.warning(f"WebSocket error for client {assigned_client_id}: {e}")
+    finally:
+        # Always clean up the connection
         await websocket_manager.disconnect(assigned_client_id)
-    except Exception:
-        await websocket_manager.disconnect(assigned_client_id)
-        raise
 
 
 @app.get("/", tags=["Health"])

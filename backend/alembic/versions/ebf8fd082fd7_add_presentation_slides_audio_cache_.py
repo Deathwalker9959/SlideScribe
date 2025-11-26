@@ -199,7 +199,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_subtitles_slide_id'), 'subtitles', ['slide_id'], unique=False)
     op.add_column('users', sa.Column('full_name', sa.String(length=255), nullable=True))
     op.add_column('users', sa.Column('preferences', sa.JSON(), nullable=True))
-    op.add_column('users', sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()))
+    op.add_column('users', sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')))
     op.add_column('users', sa.Column('updated_at', sa.DateTime(), nullable=True))
     # ### end Alembic commands ###
 

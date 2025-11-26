@@ -17,6 +17,15 @@
     <link rel="stylesheet" href="https://res-1.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css"/>
     
     <script>
+        // Configure SlideScribe backend URLs
+        window.__SLIDESCRIBE_BACKEND_URL__ = 'http://localhost:8000';
+        window.__SLIDESCRIBE_PROGRESS_WS__ = 'ws://localhost:8000/ws/progress';
+
+        console.log('Backend URLs configured:', {
+            backend: window.__SLIDESCRIBE_BACKEND_URL__,
+            websocket: window.__SLIDESCRIBE_PROGRESS_WS__
+        });
+
         // Plain JavaScript to handle reload functionality
         document.addEventListener('DOMContentLoaded', function() {
             const reloadBtn = document.getElementById('reload-btn');

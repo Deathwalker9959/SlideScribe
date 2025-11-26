@@ -1,14 +1,25 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Button } from '@ui/button';
-import { Slider } from '@ui/slider';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@ui/select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@ui/card';
-import { Badge } from '@ui/badge';
-import { Alert, AlertDescription } from '@ui/alert';
-import { RefreshCw, Volume2, Gauge, Music, Globe, Wand2, Play, Loader2, Save, User } from 'lucide-react';
-import { apiClient, VoiceSettings, VoiceProfile } from '@utils/apiClient';
+import React, { useEffect, useMemo, useState } from "react";
+import { Button } from "@ui/button";
+import { Slider } from "@ui/slider";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@ui/card";
+import { Badge } from "@ui/badge";
+import { Alert, AlertDescription } from "@ui/alert";
+import {
+  RefreshCw,
+  Volume2,
+  Gauge,
+  Music,
+  Globe,
+  Wand2,
+  Play,
+  Loader2,
+  Save,
+  User,
+} from "lucide-react";
+import { apiClient, VoiceSettings, VoiceProfile } from "@utils/apiClient";
 
-export type VoiceProvider = 'azure' | 'openai';
+export type VoiceProvider = "azure" | "openai";
 
 interface VoiceSettingsPanelProps {
   settings: VoiceSettings;
@@ -23,14 +34,14 @@ interface VoiceOption {
 }
 
 const DEFAULT_VOICES: VoiceOption[] = [
-  { id: 'en-US-AriaNeural', label: 'Aria (English US)', provider: 'azure', language: 'en-US' },
-  { id: 'en-US-GuyNeural', label: 'Guy (English US)', provider: 'azure', language: 'en-US' },
-  { id: 'en-GB-LibbyNeural', label: 'Libby (English UK)', provider: 'azure', language: 'en-GB' },
-  { id: 'alloy', label: 'Alloy (English)', provider: 'openai', language: 'en-US' },
-  { id: 'versatile', label: 'Versatile (English)', provider: 'openai', language: 'en-US' },
+  { id: "en-US-AriaNeural", label: "Aria (English US)", provider: "azure", language: "en-US" },
+  { id: "en-US-GuyNeural", label: "Guy (English US)", provider: "azure", language: "en-US" },
+  { id: "en-GB-LibbyNeural", label: "Libby (English UK)", provider: "azure", language: "en-GB" },
+  { id: "alloy", label: "Alloy (English)", provider: "openai", language: "en-US" },
+  { id: "versatile", label: "Versatile (English)", provider: "openai", language: "en-US" },
 ];
 
-const TONE_OPTIONS: VoiceSettings['tone'][] = ['professional', 'casual', 'enthusiastic', 'calm'];
+const TONE_OPTIONS: VoiceSettings["tone"][] = ["professional", "casual", "enthusiastic", "calm"];
 
 export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettingsPanelProps) {
   const [availableVoices, setAvailableVoices] = useState<VoiceOption[]>(DEFAULT_VOICES);
@@ -38,7 +49,7 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<VoiceProfile[]>([]);
-  const [selectedProfileId, setSelectedProfileId] = useState<string>('');
+  const [selectedProfileId, setSelectedProfileId] = useState<string>("");
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
@@ -50,10 +61,10 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
   const loadAvailableVoices = async () => {
     setLoadingVoices(true);
     setError(null);
-    
+
     try {
       const response = await apiClient.getAvailableVoices(settings.provider);
-      
+
       if (response.success && response.data) {
         const voices: VoiceOption[] = response.data.voices.map((voice: any) => ({
           id: voice.name,
@@ -61,14 +72,14 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
           provider: settings.provider,
           language: voice.language || settings.language,
         }));
-        
+
         if (voices.length > 0) {
           setAvailableVoices(voices);
         }
       }
     } catch (err) {
-      console.warn('Failed to load voices from backend, using defaults:', err);
-      setError('Unable to load voices from backend, using defaults');
+      console.warn("Failed to load voices from backend, using defaults:", err);
+      setError("Unable to load voices from backend, using defaults");
     } finally {
       setLoadingVoices(false);
     }
@@ -77,12 +88,12 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
   const loadVoiceProfiles = async () => {
     try {
       const response = await apiClient.getVoiceProfiles();
-      
+
       if (response.success && response.data) {
         setProfiles(response.data);
       }
     } catch (err) {
-      console.warn('Failed to load voice profiles:', err);
+      console.warn("Failed to load voice profiles:", err);
       // Don't set error here as it's not critical
     }
   };
@@ -96,7 +107,7 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
     if (filteredVoices.length === 0) {
       return;
     }
-    
+
     const voiceExists = filteredVoices.some((voice) => voice.id === settings.voice);
     if (!voiceExists) {
       const nextVoice = filteredVoices[0];
@@ -110,7 +121,7 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
 
   const handleProviderChange = async (provider: VoiceProvider) => {
     onSettingsChange({ ...settings, provider });
-    
+
     // Reload voices for the new provider
     try {
       const response = await apiClient.getAvailableVoices(provider);
@@ -121,7 +132,7 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
           provider,
           language: voice.language || settings.language,
         }));
-        
+
         if (voices.length > 0) {
           setAvailableVoices(voices);
           // Auto-select first voice from new provider
@@ -134,7 +145,7 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
         }
       }
     } catch (err) {
-      console.warn('Failed to load voices for new provider:', err);
+      console.warn("Failed to load voices for new provider:", err);
     }
   };
 
@@ -147,7 +158,7 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
     });
   };
 
-  const handleSliderChange = (key: 'speed' | 'pitch' | 'volume', val: number[]) => {
+  const handleSliderChange = (key: "speed" | "pitch" | "volume", val: number[]) => {
     const next = val[0];
     onSettingsChange({ ...settings, [key]: next });
   };
@@ -155,19 +166,19 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
   const handlePreviewVoice = async () => {
     setIsPreviewing(true);
     setError(null);
-    setStatusMessage('Generating voice preview...');
-    
+    setStatusMessage("Generating voice preview...");
+
     try {
       const response = await apiClient.previewVoice(settings);
-      
+
       if (response.success) {
-        setStatusMessage('Voice preview generated successfully');
+        setStatusMessage("Voice preview generated successfully");
       } else {
-        throw new Error(response.error || 'Failed to generate preview');
+        throw new Error(response.error || "Failed to generate preview");
       }
     } catch (err) {
-      console.error('Voice preview failed:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to generate voice preview';
+      console.error("Voice preview failed:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to generate voice preview";
       setError(errorMessage);
       setStatusMessage(null);
     } finally {
@@ -177,48 +188,48 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
 
   const handleApplyProfile = async (profileId: string) => {
     setSelectedProfileId(profileId);
-    
+
     try {
       const response = await apiClient.getVoiceProfile(profileId);
-      
+
       if (response.success && response.data) {
         onSettingsChange(response.data.settings);
         setStatusMessage(`Applied profile "${response.data.name}"`);
       } else {
-        throw new Error(response.error || 'Failed to load profile');
+        throw new Error(response.error || "Failed to load profile");
       }
     } catch (err) {
-      console.error('Failed to apply profile:', err);
-      setError('Failed to apply voice profile');
+      console.error("Failed to apply profile:", err);
+      setError("Failed to apply voice profile");
     }
   };
 
   const handleSaveProfile = async () => {
-    const name = window.prompt('Enter a name for this voice profile:');
+    const name = window.prompt("Enter a name for this voice profile:");
     if (!name) {
       return;
     }
 
     setIsSavingProfile(true);
-    setStatusMessage('Saving voice profile...');
-    
+    setStatusMessage("Saving voice profile...");
+
     try {
       const response = await apiClient.createVoiceProfile({
         name,
-        description: 'Created from Office Add-in',
+        description: "Created from Office Add-in",
         settings,
       });
-      
+
       if (response.success) {
         setStatusMessage(`Profile "${name}" saved successfully`);
-        setSelectedProfileId(response.data?.id || '');
+        setSelectedProfileId(response.data?.id || "");
         await loadVoiceProfiles(); // Reload profiles list
       } else {
-        throw new Error(response.error || 'Failed to save profile');
+        throw new Error(response.error || "Failed to save profile");
       }
     } catch (err) {
-      console.error('Failed to save profile:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to save voice profile';
+      console.error("Failed to save profile:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to save voice profile";
       setError(errorMessage);
       setStatusMessage(null);
     } finally {
@@ -228,17 +239,17 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
 
   const handleResetSettings = () => {
     const defaultSettings: VoiceSettings = {
-      provider: 'azure',
-      voice: 'en-US-AriaNeural',
+      provider: "azure",
+      voice: "en-US-AriaNeural",
       speed: 1.0,
       pitch: 0,
       volume: 1.0,
-      tone: 'professional',
-      language: 'en-US',
+      tone: "professional",
+      language: "en-US",
     };
-    
+
     onSettingsChange(defaultSettings);
-    setStatusMessage('Voice settings reset to defaults');
+    setStatusMessage("Voice settings reset to defaults");
   };
 
   return (
@@ -272,10 +283,7 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Provider</label>
-              <Select 
-                value={settings.provider} 
-                onValueChange={handleProviderChange}
-              >
+              <Select value={settings.provider} onValueChange={handleProviderChange}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -313,9 +321,11 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Tone</label>
-              <Select 
-                value={settings.tone} 
-                onValueChange={(tone) => onSettingsChange({ ...settings, tone: tone as VoiceSettings['tone'] })}
+              <Select
+                value={settings.tone}
+                onValueChange={(tone) =>
+                  onSettingsChange({ ...settings, tone: tone as VoiceSettings["tone"] })
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -348,7 +358,7 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
               </label>
               <Slider
                 value={[settings.speed]}
-                onValueChange={(val) => handleSliderChange('speed', val)}
+                onValueChange={(val) => handleSliderChange("speed", val)}
                 min={0.5}
                 max={2.0}
                 step={0.05}
@@ -363,7 +373,7 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
               </label>
               <Slider
                 value={[settings.pitch]}
-                onValueChange={(val) => handleSliderChange('pitch', val)}
+                onValueChange={(val) => handleSliderChange("pitch", val)}
                 min={-50}
                 max={50}
                 step={1}
@@ -378,7 +388,7 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
               </label>
               <Slider
                 value={[settings.volume]}
-                onValueChange={(val) => handleSliderChange('volume', val)}
+                onValueChange={(val) => handleSliderChange("volume", val)}
                 min={0.1}
                 max={2.0}
                 step={0.05}
@@ -391,19 +401,11 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
           <div className="flex items-center justify-between pt-4 border-t">
             <Badge variant="secondary">Tone: {titleCase(settings.tone)}</Badge>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleResetSettings}
-              >
+              <Button variant="outline" size="sm" onClick={handleResetSettings}>
                 <Wand2 className="h-4 w-4 mr-2" />
                 Reset
               </Button>
-              <Button
-                size="sm"
-                onClick={handlePreviewVoice}
-                disabled={isPreviewing}
-              >
+              <Button size="sm" onClick={handlePreviewVoice} disabled={isPreviewing}>
                 {isPreviewing ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
@@ -423,9 +425,7 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
             <User className="h-5 w-5" />
             Voice Profiles
           </CardTitle>
-          <CardDescription>
-            Save and load voice configuration profiles
-          </CardDescription>
+          <CardDescription>Save and load voice configuration profiles</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2">
@@ -435,7 +435,9 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
               </SelectTrigger>
               <SelectContent>
                 {profiles.length === 0 && (
-                  <SelectItem value="" disabled>No profiles available</SelectItem>
+                  <SelectItem value="" disabled>
+                    No profiles available
+                  </SelectItem>
                 )}
                 {profiles.map((profile) => (
                   <SelectItem key={profile.id} value={profile.id}>
@@ -457,7 +459,7 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
               )}
             </Button>
           </div>
-          
+
           {profiles.length === 0 && (
             <p className="text-sm text-muted-foreground">
               No saved profiles yet. Create one by clicking the save button above.

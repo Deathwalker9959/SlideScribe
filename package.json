@@ -1,0 +1,40 @@
+{
+  "name": "slidescribe",
+  "version": "1.0.0",
+  "description": "An AI Assistant for Narration and Refinement of Powerpoint Slides",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "postinstall": "cd addin && npm install && cd ../com-addin && npm install",
+    "start": "concurrently --kill-others-on-fail --names \"ADDIN,BACKEND\" -c \"cyan,yellow\" \"npm run start:addin\" \"npm run start:backend-attached\"",
+    "start:detached": "npm run start:backend-detached && npm run start:addin",
+    "start:all": "npm run build:com-addin && concurrently --kill-others-on-fail --names \"ADDIN,COM-WATCH,BACKEND\" -c \"cyan,magenta,yellow\" \"npm run start:addin\" \"npm run watch:com-addin\" \"npm run start:backend-attached\"",
+    "start:addin": "cd addin && echo Y| npm run start",
+    "start:addin:dev": "cd addin && npm run dev-server",
+    "start:backend-detached": "cd backend && docker compose up -d",
+    "start:backend-attached": "cd backend && docker compose up",
+    "watch:com-addin": "cd com-addin && npm run watch",
+    "stop": "cd backend && docker compose down",
+    "logs": "cd backend && docker compose logs -f",
+    "logs:backend": "cd backend && docker compose logs -f app",
+    "status": "cd backend && docker compose ps",
+    "build": "concurrently --names \"ADDIN,COM-ADDIN\" -c \"cyan,magenta\" \"npm run build:addin\" \"npm run build:com-addin\"",
+    "build:addin": "cd addin && npm run build",
+    "build:com-addin": "powershell -ExecutionPolicy Bypass -File com-addin/BuildAddin.ps1 -Configuration Release",
+    "rebuild:com-addin": "powershell -ExecutionPolicy Bypass -File com-addin/BuildAddin.ps1 -Configuration Release -UninstallFirst",
+    "uninstall:com-addin": "powershell -ExecutionPolicy Bypass -File com-addin/UninstallAddin.ps1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Deathwalker9959/SlideScribe.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Deathwalker9959/SlideScribe/issues"
+  },
+  "homepage": "https://github.com/Deathwalker9959/SlideScribe#readme",
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
