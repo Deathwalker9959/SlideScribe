@@ -77,6 +77,7 @@ module.exports = async (env, options) => {
       new webpack.DefinePlugin({
         'process.env.BACKEND_URL': JSON.stringify(process.env.BACKEND_URL || 'http://localhost:8000'),
         'process.env.WS_URL': JSON.stringify(process.env.WS_URL || 'ws://localhost:8000/ws/progress'),
+        'process.env.SLIDESCRIBE_BRIDGE_TOKEN': JSON.stringify(process.env.SLIDESCRIBE_BRIDGE_TOKEN || ''),
       }),
       new HtmlWebpackPlugin({
         filename: "taskpane.html",
