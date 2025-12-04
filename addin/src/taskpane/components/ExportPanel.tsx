@@ -62,13 +62,11 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
       const currentStatus = comBridge.getAvailability();
       if (currentStatus.isAvailable) {
         setComBridgeAvailable(true);
-        console.log(`COM Bridge already available`);
         return;
       }
 
       const available = await comBridge.detectAndInitialize();
       setComBridgeAvailable(available);
-      console.log(`COM Bridge availability: ${available}`);
     } catch (error) {
       console.warn("COM Bridge detection failed:", error);
       setComBridgeAvailable(false);
@@ -165,12 +163,9 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
       const currentComBridgeStatus = comBridge.getAvailability();
       const actuallyAvailable = currentComBridgeStatus.isAvailable;
 
-      console.log(`🔍 COM Bridge status check: enabled=${useComBridge}, available=${comBridgeAvailable}, actuallyAvailable=${actuallyAvailable}`);
-
       // Try COM Bridge first if available and enabled
       if (useComBridge && actuallyAvailable) {
         setEmbedMessage("Using COM Bridge for enhanced embedding...");
-        console.log("🎯 Attempting COM Bridge audio embedding");
 
         // Embed via COM Bridge for each slide
         let successCount = 0;
@@ -180,21 +175,15 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
           const slide = slideScripts[slideNumber];
           if (slide.audioUrl) {
             try {
-              console.log(`🎵 Embedding audio for slide ${slideNumber}: ${slide.audioUrl}`);
               await comBridge.embedAudioFromFile(slide.audioUrl, slideNumber);
               successCount++;
               setEmbedMessage(`COM Bridge: Embedded audio for slide ${slideNumber} (${successCount}/${totalSlides})`);
-              console.log(`✅ Successfully embedded audio for slide ${slideNumber}`);
             } catch (error) {
-              console.error(`❌ COM Bridge failed for slide ${slideNumber}:`, error);
+              console.error(`COM Bridge failed for slide ${slideNumber}:`, error);
               errorCount++;
             }
-          } else {
-            console.warn(`⚠️ No audio URL found for slide ${slideNumber}`);
           }
         }
-
-        console.log(`📊 COM Bridge embedding complete: ${successCount} success, ${errorCount} errors`);
 
         if (successCount > 0) {
           setEmbedStatus("success");
@@ -208,7 +197,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
         const reason = !useComBridge ? "COM Bridge disabled by user" :
                       !comBridgeAvailable ? "COM Bridge not available" : "Unknown reason";
         setEmbedMessage(`Using Office.js for embedding (${reason})`);
-        console.log(`⚠️ Falling back to Office.js: ${reason}`);
 
         // Check if PowerPoint API is available (this should work inside PowerPoint)
         if (typeof PowerPoint === "undefined") {

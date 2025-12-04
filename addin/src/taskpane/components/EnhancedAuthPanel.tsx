@@ -365,13 +365,7 @@ export function EnhancedAuthPanel({
         setCurrentUser(authUser);
         onAuthChange?.(true, authUser, authUser.session_id);
       }
-    } catch (error) {
-      // Silently handle expected 401 errors when no token exists
-      if (error instanceof Error && error.message.includes("401")) {
-        console.log("No authentication token found - user not authenticated");
-      } else {
-        console.log("Authentication check failed:", error);
-      }
+    } catch {
       setCurrentUser(null);
       onAuthChange?.(false);
     }

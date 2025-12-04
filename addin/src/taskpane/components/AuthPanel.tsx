@@ -36,8 +36,7 @@ export function AuthPanel({ onAuthChange, className }: AuthPanelProps) {
         setIsAuthenticated(true);
         onAuthChange?.(true);
       }
-    } catch (error) {
-      console.log("Not authenticated:", error);
+    } catch {
       setIsAuthenticated(false);
       setCurrentUser(null);
       onAuthChange?.(false);
@@ -230,8 +229,7 @@ export function DevAuthPanel({ onAuthChange, className }: AuthPanelProps) {
       // Try to login with test credentials
       await apiClient.login({ username: "testuser", password: "testpass" });
       onAuthChange?.(true);
-    } catch (error) {
-      console.log("Auto-login failed, using mock auth for development");
+    } catch {
       // For development, set a mock token
       if (typeof window !== "undefined") {
         window.localStorage.setItem("slidescribe_auth_token", "dev_token");

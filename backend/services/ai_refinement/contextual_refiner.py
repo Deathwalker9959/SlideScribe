@@ -62,7 +62,10 @@ class ContextualRefiner:
         original_text = request.slide_text.strip()
         base_text = original_text
         if not base_text:
-            base_text = "This slide currently has no narration content defined. Briefly describe the key message."
+            base_text = (
+                "This slide currently has no narration content. Briefly speak the key message in 1–2 natural sentences "
+                "as a presenter would, without bullet points."
+            )
 
         highlights = [] if not original_text else self._extract_highlights(base_text)
         image_references = self._build_image_references(request.images)

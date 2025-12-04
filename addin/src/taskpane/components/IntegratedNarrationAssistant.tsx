@@ -127,7 +127,6 @@ export function IntegratedNarrationAssistant({
           setLastError("WebSocket connection error");
         },
         (event) => {
-          console.log("WebSocket closed:", event);
           if (!event.wasClean) {
             setLastError("WebSocket connection lost");
           }
@@ -189,12 +188,8 @@ export function IntegratedNarrationAssistant({
       }
 
       // Load available voices
-      const voicesResponse = await apiClient.getAvailableVoices(voiceSettings.provider);
-      if (voicesResponse.success) {
-        console.log("Available voices loaded:", voicesResponse.data);
-      }
-    } catch (error) {
-      console.error("Failed to load user settings:", error);
+      await apiClient.getAvailableVoices(voiceSettings.provider);
+    } catch {
       // Don't set error here, as it's not critical
     }
   };

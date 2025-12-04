@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from services.audio_processing.service import AudioProcessor
-from services.auth import oauth2_scheme
+from services.auth import oauth2_scheme, oauth2_scheme_optional
 from shared.models import (
     AudioCombineRequest,
     AudioCombineResponse,
@@ -86,7 +86,7 @@ async def get_audio_job(job_id: str, token: str = Depends(oauth2_scheme)) -> dic
 async def download_audio(
     job_id: str,
     format: str | None = Query(default=None, description="Optional export format to download"),
-    token: str = Depends(oauth2_scheme),
+    token: str | None = Depends(oauth2_scheme_optional),
 ) -> FileResponse:
     """Stream the latest audio mix or a specific export for a job."""
     status = audio_processor.get_job_status(job_id)
@@ -121,7 +121,10 @@ async def download_audio(
 
 
 @app.get("/exports/{job_id}", response_model=list[AudioExportResponse])
-async def list_audio_exports(job_id: str, token: str = Depends(oauth2_scheme)) -> list[AudioExportResponse]:
+async def list_audio_exports(
+    job_id: str,
+    token: str | None = Depends(oauth2_scheme_optional),
+) -> list[AudioExportResponse]:
     """Return all available audio exports for a job."""
     status = audio_processor.get_job_status(job_id)
     if not status:
@@ -152,6 +155,6 @@ async def list_audio_exports(job_id: str, token: str = Depends(oauth2_scheme)) -
 
 
 @app.get("/health", response_model=dict, tags=["Health"])
-async def audio_health(token: str = Depends(oauth2_scheme)) -> dict:
+async def audio_health(token: str | None = Depends(oauth2_scheme_optional)) -> dict:
     """Return diagnostics for the audio processing service."""
     return audio_processor.get_health_status()

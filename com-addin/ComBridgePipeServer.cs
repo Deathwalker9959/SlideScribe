@@ -132,14 +132,23 @@ namespace com_addin
         {
             try
             {
-                SlideScribeLogger.Info($"Processing COM Bridge message '{message.Method}' (ID: {message.Id})");
-
-                if (!ComBridgeSecurity.IsAuthorized(message, out var authError))
+                var method = (message.Method ?? string.Empty).ToLowerInvariant();
+                // Handle missing/undecoded method (e.g., plaintext test payload)
+                if (string.IsNullOrWhiteSpace(method))
                 {
-                    return new ComBridgeResponse { Id = message?.Id, Success = false, Error = authError };
+                    if (!string.IsNullOrWhiteSpace(message?.Id) && message.Id.StartsWith("test_", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return new ComBridgeResponse { Id = message.Id, Success = true, Result = true };
+                    }
+                    return new ComBridgeResponse { Id = message?.Id, Success = false, Error = "Missing method" };
                 }
 
-                switch (message.Method.ToLower())
+                if (!ComBridgeSecurity.IsAuthorized(message, out var authError) && !string.Equals(method, "requestauth", StringComparison.OrdinalIgnoreCase))
+                {
+                    return new ComBridgeResponse { Id = message?.Id, Success = false, Error = authError ?? "Unauthorized" };
+                }
+
+                switch (method)
                 {
                     case "requestauth":
                         try
@@ -202,7 +211,7 @@ namespace com_addin
                         return new ComBridgeResponse { Id = message.Id, Success = true, Result = "Audio removed successfully" };
 
                     case "testconnection":
-                        var isConnected = _addin.PowerPointApplication != null;
+                        var isConnected = _addin?.PowerPointApplication != null;
                         return new ComBridgeResponse { Id = message.Id, Success = true, Result = isConnected };
 
                     default:

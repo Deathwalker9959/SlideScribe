@@ -22,7 +22,8 @@ class User(Base):
     full_name = Column(String(255), nullable=True)
     disabled = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)
-    preferences = Column(JSON, default={})
+    is_active = Column(Boolean, default=True)
+    preferences = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

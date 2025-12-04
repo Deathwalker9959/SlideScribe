@@ -19,10 +19,7 @@ export class PowerPointService {
    * Extract slides from the current PowerPoint presentation
    */
   static async extractSlides(): Promise<SlideScript[]> {
-    console.log("=== Starting PowerPoint slide extraction ===");
-
     if (!PowerPointService.isAvailable()) {
-      console.warn("PowerPoint object is unavailable - no slides available");
       return [];
     }
 
@@ -40,14 +37,10 @@ export class PowerPointService {
           ? presentationSlides.items.length
           : 0;
 
-        console.log(`Found ${totalSlides} slides in presentation`);
-
         for (let i = 0; i < totalSlides; i++) {
           const slide = presentationSlides.items[i];
           slide.load("title");
           await context.sync();
-
-          console.log(`Processing slide ${i + 1}/${totalSlides}: "${slide.title || "Untitled"}"`);
 
           // Extract text from slide shapes
           const textContent = await PowerPointService.extractSlideText(slide, context);
@@ -73,21 +66,12 @@ export class PowerPointService {
           };
 
           slides.push(slideData);
-          console.log(`Slide ${i + 1} extracted: ${wordCount} words, ${durationSeconds}s duration`);
         }
       });
-
-      console.log(`=== Extraction complete: ${slides.length} slides extracted ===`);
-
-      if (slides.length === 0) {
-        console.warn("No slides extracted from PowerPoint");
-        return [];
-      }
 
       return slides;
     } catch (error) {
       console.error("Failed to extract slides from PowerPoint:", error);
-      console.error("Error details:", error instanceof Error ? error.message : String(error));
       return [];
     }
   }
@@ -97,39 +81,40 @@ export class PowerPointService {
    */
   private static async extractSlideText(slide: any, context: any): Promise<string> {
     try {
-      // Get all shapes on the slide
+      // Get all shapes on the slide - load basic properties first
       const shapes = slide.shapes;
-      shapes.load(
-        "items/type,items/name,items/textFrame/hasText,items/textFrame/textRange/text,items/textFrame"
-      );
+      shapes.load("items");
       await context.sync();
 
-      console.log(`Found ${shapes.items.length} shapes on slide`);
-
       const textParts: string[] = [];
-      let titleText = "";
 
-      // Collect text in a single pass
-      shapes.items.forEach((shape: any, index: number) => {
-        const hasText = shape.textFrame?.hasText;
-        const text = hasText ? shape.textFrame?.textRange?.text?.trim?.() : "";
-        if (!text) {
-          return;
+      // Process each shape individually to avoid InvalidArgument errors
+      for (const shape of shapes.items) {
+        try {
+          // Check if shape has textFrame
+          shape.load("textFrame");
+          await context.sync();
+
+          if (shape.textFrame) {
+            shape.textFrame.load("hasText");
+            await context.sync();
+
+            if (shape.textFrame.hasText) {
+              shape.textFrame.textRange.load("text");
+              await context.sync();
+
+              const text = shape.textFrame.textRange.text?.trim?.() || "";
+              if (text) {
+                textParts.push(text);
+              }
+            }
+          }
+        } catch {
+          // Shape may not support textFrame - skip it
         }
+      }
 
-        if (!titleText && index === 0) {
-          titleText = text;
-        }
-
-        textParts.push(text);
-        console.log(`Shape ${index + 1}: extracted "${text.substring(0, 80)}"`);
-      });
-
-      const joined = textParts.join("\n").trim();
-      const preview = joined.length > 120 ? `${joined.substring(0, 120)}...` : joined;
-      console.log(`Total extracted text (${joined.length} chars): "${preview}"`);
-
-      return joined;
+      return textParts.join("\n").trim();
     } catch (error) {
       console.error("Error extracting text from slide:", error);
       return "";

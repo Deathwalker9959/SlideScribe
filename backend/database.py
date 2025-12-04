@@ -127,7 +127,9 @@ async def get_async_db():
         try:
             yield session
         finally:
-            await session.close()
+            # Let the context manager close/cleanup; rollback if something is still open
+            if session.in_transaction():
+                await session.rollback()
 
 
 def get_db():

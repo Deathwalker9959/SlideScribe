@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using PowerPoint = Microsoft.Office.Interop.PowerPoint;
 
 namespace com_addin
@@ -63,6 +64,7 @@ namespace com_addin
             try
             {
                 ValidateAuthToken();
+                ShowBuildInfo();
                 InitializeComBridge();
                 await StartServersAsync();
                 RegisterComBridge();
@@ -168,6 +170,24 @@ namespace com_addin
             // This is a placeholder for future ribbon customization
         }
 
+        private static void ShowBuildInfo()
+        {
+            try
+            {
+                var assembly = typeof(ThisAddIn).Assembly;
+                var buildTime = System.IO.File.GetLastWriteTime(assembly.Location);
+                MessageBox.Show(
+                    $"SlideScribe COM Add-in loaded.\nBuild timestamp: {buildTime:G}",
+                    "SlideScribe COM Add-in",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch
+            {
+                // Swallow any UI/logging errors to avoid blocking add-in startup
+            }
+        }
+
         /// <summary>
         /// Required method for Designer support - do not modify
         /// the contents of this method with the code editor.
@@ -180,11 +200,7 @@ namespace com_addin
 
         private static void ValidateAuthToken()
         {
-            var token = Environment.GetEnvironmentVariable(ComBridgeSecurity.AuthEnvVar);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                SlideScribeLogger.Warn($"Authentication token not provided; generating one-time token. Set {ComBridgeSecurity.AuthEnvVar} to supply your own.");
-            }
+            // Token is generated on demand; no env seeding required
             ComBridgeSecurity.InitializeToken();
         }
     }

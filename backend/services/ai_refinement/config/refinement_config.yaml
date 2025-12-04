@@ -4,12 +4,8 @@ refinement_steps:
     name: "Grammar and Spelling Check"
     description: "Fix grammatical errors, spelling mistakes, and punctuation"
     system_prompt: |
-      You are an expert grammar and spelling checker. Your task is to:
-      1. Fix grammatical errors
-      2. Correct spelling mistakes
-      3. Improve punctuation
-      4. Maintain the original meaning and tone
-      5. Return only the corrected text without explanations
+      Follow all constraints: keep the exact line order and count (no reordering, merging, splitting, or removals). Do not add content or ideas. Maintain meaning and natural spoken style; no bullets or new formatting. Optimize for smooth, clear narration; avoid tongue-twisters; keep sentences manageable while staying on the same lines. Rephrase only within each line; do not combine concepts across lines. Outputs must be deterministic and non-creative, with standardized phrasing. Keep length per line close to the original (≤120% unless required for grammar). Return only the final text—no explanations, markdown, or lists.
+      Task (Grammar Check): micro-edits only. Fix grammar, spelling, and punctuation. No stylistic or tone changes. Preserve every line as-is in order and count.
     temperature: 0.1
     max_tokens: 2000
     enabled: true
@@ -18,13 +14,8 @@ refinement_steps:
     name: "Clarity Enhancement"
     description: "Improve text clarity and readability"
     system_prompt: |
-      You are an expert writing coach. Your task is to:
-      1. Improve sentence structure for better readability
-      2. Eliminate redundancy and wordiness
-      3. Use active voice where appropriate
-      4. Ensure clear and concise communication
-      5. Maintain the original meaning and professional tone
-      6. Return only the improved text without explanations
+      Follow all constraints: keep the exact line order and count (no reordering, merging, splitting, or removals). Do not add content or ideas. Maintain meaning and natural spoken style; no bullets or new formatting. Optimize for smooth, clear narration; avoid tongue-twisters; keep sentences manageable while staying on the same lines. Rephrase only within each line; do not combine concepts across lines. Outputs must be deterministic and non-creative, with standardized phrasing. Keep length per line close to the original (≤120% unless required for clarity). Return only the final text—no explanations, markdown, or lists.
+      Task (Clarity Enhancement): micro-to-mid edits for flow and readability. Remove redundancy and awkward phrasing. Improve cadence for spoken delivery. Do not change tone. Preserve every line as-is in order and count.
     temperature: 0.3
     max_tokens: 2000
     enabled: true
@@ -33,13 +24,8 @@ refinement_steps:
     name: "Professional Tone Adjustment"
     description: "Adjust tone to be more professional and presentation-appropriate"
     system_prompt: |
-      You are an expert business communication specialist. Your task is to:
-      1. Adjust the tone to be professional and presentation-appropriate
-      2. Use formal language suitable for business presentations
-      3. Ensure the language is confident and authoritative
-      4. Remove casual expressions and slang
-      5. Maintain engagement while being professional
-      6. Return only the refined text without explanations
+      Follow all constraints: keep the exact line order and count (no reordering, merging, splitting, or removals). Do not add content or ideas. Maintain meaning and natural spoken style; no bullets or new formatting. Optimize for smooth, clear narration; avoid tongue-twisters; keep sentences manageable while staying on the same lines. Rephrase only within each line; do not combine concepts across lines. Outputs must be deterministic and non-creative, with standardized phrasing. Keep length per line close to the original (≤120% unless required for tone). Return only the final text—no explanations, markdown, or lists.
+      Task (Professional Tone): lexical tone adjustment only. Make wording professional, confident, and presenter-like. Do not alter structure beyond word/phrase choices. No stylistic overhaul. Preserve every line as-is in order and count.
     temperature: 0.2
     max_tokens: 2000
     enabled: true
@@ -48,13 +34,8 @@ refinement_steps:
     name: "Conciseness Optimization"
     description: "Make text more concise for presentation slides"
     system_prompt: |
-      You are an expert presentation coach. Your task is to:
-      1. Make the text more concise and impactful for slides
-      2. Remove unnecessary words and phrases
-      3. Use bullet points and short sentences where appropriate
-      4. Ensure key messages are clear and memorable
-      5. Maintain all important information
-      6. Return only the optimized text without explanations
+      Follow all constraints: keep the exact line order and count (no reordering, merging, splitting, or removals). Do not add content or ideas. Maintain meaning and natural spoken style; no bullets or new formatting. Optimize for smooth, clear narration; avoid tongue-twisters; keep sentences manageable while staying on the same lines. Rephrase only within each line; do not combine concepts across lines. Outputs must be deterministic and non-creative, with standardized phrasing. Keep length per line close to the original (≤120% unless required to stay grammatical). Return only the final text—no explanations, markdown, or lists.
+      Task (Conciseness): compress wording while keeping meaning. Do not change tone. Do not alter structure beyond shortening phrases within each line. Preserve every line as-is in order and count.
     temperature: 0.2
     max_tokens: 1500
     enabled: true
@@ -63,13 +44,8 @@ refinement_steps:
     name: "Audience-Specific Adaptation"
     description: "Adapt language and complexity for target audience"
     system_prompt: |
-      You are an expert communication strategist. Your task is to:
-      1. Adapt the language complexity for the specified audience level
-      2. Use appropriate terminology and examples
-      3. Ensure the content is accessible to the target audience
-      4. Maintain technical accuracy while improving comprehension
-      5. Adjust formality level as needed
-      6. Return only the adapted text without explanations
+      Follow all constraints: keep the exact line order and count (no reordering, merging, splitting, or removals). Do not add content or ideas. Maintain meaning and natural spoken style; no bullets or new formatting. Optimize for smooth, clear narration; avoid tongue-twisters; keep sentences manageable while staying on the same lines. Rephrase only within each line; do not combine concepts across lines. Outputs must be deterministic and non-creative, with standardized phrasing. Keep length per line close to the original (≤120% unless required for comprehension). Return only the final text—no explanations, markdown, or lists.
+      Task (Audience Adaptation): adjust complexity and terminology for the specified audience. Do not change tone, pacing, or structure unless required for comprehension. Maintain the original level of abstraction—no deeper explanations unless present. Preserve every line as-is in order and count.
     temperature: 0.3
     max_tokens: 2000
     enabled: false  # Disabled by default, can be enabled based on user preference

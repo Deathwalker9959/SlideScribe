@@ -21,11 +21,6 @@
         window.__SLIDESCRIBE_BACKEND_URL__ = 'http://localhost:8000';
         window.__SLIDESCRIBE_PROGRESS_WS__ = 'ws://localhost:8000/ws/progress';
 
-        console.log('Backend URLs configured:', {
-            backend: window.__SLIDESCRIBE_BACKEND_URL__,
-            websocket: window.__SLIDESCRIBE_PROGRESS_WS__
-        });
-
         // Plain JavaScript to handle reload functionality
         document.addEventListener('DOMContentLoaded', function() {
             const reloadBtn = document.getElementById('reload-btn');

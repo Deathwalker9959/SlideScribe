@@ -20,7 +20,17 @@ class OpenAIRefinementDriver(AIRefinementDriver):
     async def refine(self, text: str, step_config: dict[str, Any], **kwargs: Any) -> str:
         """Refine text using OpenAI."""
         model = step_config.get("model", "gpt-4")
-        system_prompt = step_config.get("system_prompt", "Refine this text.")
+        system_prompt = step_config.get(
+            "system_prompt",
+            (
+                "Follow all constraints: keep the exact line order and count (no reordering, merging, splitting, or removals). "
+                "Do not add content or ideas. Maintain meaning and natural spoken style; no bullets or new formatting. "
+                "Optimize for smooth, clear narration; avoid tongue-twisters; keep sentences manageable while staying on the same lines. "
+                "Rephrase only within each line; do not combine concepts across lines. Outputs must be deterministic and non-creative, "
+                "with standardized phrasing. Keep length per line close to the original (≤120% unless required). "
+                "Return only the final text—no explanations, markdown, or lists. Task: polish slide narration text accordingly."
+            ),
+        )
         temperature = step_config.get("temperature", 0.3)
         max_tokens = step_config.get("max_tokens", 2000)
 

@@ -4,11 +4,12 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
 
 namespace com_addin
 {
     /// <summary>
-    /// Simple WebSocket server for COM-Office.js communication
+    /// WebSocket server for COM-Office.js communication with AES-CBC encryption.
     /// </summary>
     public class ComBridgeWebSocketServer
     {
@@ -93,10 +94,11 @@ namespace com_addin
 
         private async Task HandleWebSocketAsync(HttpListenerContext context)
         {
+            WebSocket webSocket = null;
             try
             {
                 var webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
-                var webSocket = webSocketContext.WebSocket;
+                webSocket = webSocketContext.WebSocket;
 
                 SlideScribeLogger.Info("WebSocket client connected");
 
@@ -110,46 +112,14 @@ namespace com_addin
 
                         if (result.Count > ComBridgeSecurity.MaxMessageBytes || !result.EndOfMessage)
                         {
-                            SlideScribeLogger.Warn("WebSocket message too large or fragmented; closing connection");
+                            SlideScribeLogger.Warn("Message too large or fragmented");
                             await webSocket.CloseAsync(WebSocketCloseStatus.MessageTooBig, "Message too large", CancellationToken.None);
                             break;
                         }
 
                         if (result.MessageType == WebSocketMessageType.Text)
                         {
-                            var messageJson = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                            var message = SimpleJson.Deserialize<ComBridgeMessage>(messageJson);
-
-                            if (message != null)
-                            {
-                                if (!ComBridgeSecurity.IsAuthorized(message, out var authError))
-                                {
-                                    var unauthorized = Encoding.UTF8.GetBytes(SimpleJson.Serialize(new ComBridgeResponse
-                                    {
-                                        Id = message.Id,
-                                        Success = false,
-                                        Error = authError
-                                    }));
-
-                                    await webSocket.SendAsync(new ArraySegment<byte>(unauthorized), WebSocketMessageType.Text, true, _cancellationTokenSource.Token);
-                                    continue;
-                                }
-
-                                var response = await _pipeServer.ProcessMessageAsync(message);
-
-                                var responseJson = SimpleJson.Serialize(response);
-                                var responseBuffer = Encoding.UTF8.GetBytes(responseJson);
-
-                                await webSocket.SendAsync(
-                                    new ArraySegment<byte>(responseBuffer),
-                                    WebSocketMessageType.Text,
-                                    true,
-                                    _cancellationTokenSource.Token);
-                            }
-                            else
-                            {
-                                SlideScribeLogger.Warn("Failed to parse COM Bridge message");
-                            }
+                            await ProcessTextMessageAsync(webSocket, buffer, result.Count);
                         }
                         else if (result.MessageType == WebSocketMessageType.Close)
                         {
@@ -159,7 +129,7 @@ namespace com_addin
                     }
                     catch (WebSocketException ex)
                     {
-                        SlideScribeLogger.Warn($"WebSocket communication error: {ex.Message}");
+                        SlideScribeLogger.Warn($"WebSocket error: {ex.Message}");
                         break;
                     }
                 }
@@ -172,14 +142,160 @@ namespace com_addin
             }
             finally
             {
-                try
+                try { context.Response.Close(); } catch { }
+            }
+        }
+
+        private async Task ProcessTextMessageAsync(WebSocket webSocket, byte[] buffer, int count)
+        {
+            var messageJson = Encoding.UTF8.GetString(buffer, 0, count);
+            var wasEncrypted = IsEncryptedEnvelope(messageJson);
+            var decryptedJson = TryDecryptEnvelope(messageJson);
+            var message = SimpleJson.Deserialize<ComBridgeMessage>(decryptedJson);
+
+            if (message == null)
+            {
+                SlideScribeLogger.Warn("Failed to parse message");
+                return;
+            }
+
+            // Handle missing method for test messages
+            if (string.IsNullOrWhiteSpace(message.Method) && message.Id?.StartsWith("test_", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                message.Method = "testconnection";
+            }
+
+            // Enforce auth except for handshake methods
+            var isHandshake = string.Equals(message.Method, "testconnection", StringComparison.OrdinalIgnoreCase) ||
+                              string.Equals(message.Method, "requestauth", StringComparison.OrdinalIgnoreCase);
+
+            if (!isHandshake && !ComBridgeSecurity.IsAuthorized(message, out var authError))
+            {
+                SlideScribeLogger.Warn($"Auth failed for '{message.Method}': {authError}");
+                var errorResponse = SimpleJson.Serialize(new ComBridgeResponse
                 {
-                    context.Response.Close();
+                    Id = message.Id,
+                    Success = false,
+                    Error = authError
+                });
+                await SendResponseAsync(webSocket, errorResponse);
+                return;
+            }
+
+            var response = await _pipeServer.ProcessMessageAsync(message);
+            var responseJson = SimpleJson.Serialize(response);
+            var responsePayload = wasEncrypted ? EncryptEnvelope(response.Id, responseJson, message.Method) : responseJson;
+
+            await SendResponseAsync(webSocket, responsePayload);
+        }
+
+        private async Task SendResponseAsync(WebSocket webSocket, string payload)
+        {
+            var responseBuffer = Encoding.UTF8.GetBytes(payload);
+            await webSocket.SendAsync(
+                new ArraySegment<byte>(responseBuffer),
+                WebSocketMessageType.Text,
+                true,
+                _cancellationTokenSource.Token);
+        }
+
+        private string TryDecryptEnvelope(string messageJson)
+        {
+            try
+            {
+                var envelope = SimpleJson.Deserialize<Envelope>(messageJson);
+                var encPayload = envelope?.EncryptedPayload ?? envelope?.encryptedPayload;
+                var ivVal = envelope?.Iv ?? envelope?.iv;
+
+                if (string.IsNullOrWhiteSpace(encPayload) || string.IsNullOrWhiteSpace(ivVal))
+                {
+                    return messageJson;
                 }
-                catch
+
+                var key = ComBridgeSecurity.GetEncryptionKeyBytes();
+                var cipherBytes = Convert.FromBase64String(encPayload);
+                var ivBytes = Convert.FromBase64String(ivVal);
+
+                using (var aes = Aes.Create())
                 {
+                    aes.Mode = CipherMode.CBC;
+                    aes.Padding = PaddingMode.PKCS7;
+                    aes.Key = key;
+                    aes.IV = ivBytes;
+
+                    using (var decryptor = aes.CreateDecryptor())
+                    {
+                        var plainBytes = decryptor.TransformFinalBlock(cipherBytes, 0, cipherBytes.Length);
+                        return Encoding.UTF8.GetString(plainBytes);
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                SlideScribeLogger.Warn($"Decryption failed: {ex.Message}");
+                return messageJson;
+            }
+        }
+
+        private string EncryptEnvelope(string id, string responseJson, string originalMethod)
+        {
+            // Skip encryption for handshake methods - client expects plaintext for these
+            if (!string.IsNullOrWhiteSpace(originalMethod) &&
+                (string.Equals(originalMethod, "testconnection", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(originalMethod, "requestauth", StringComparison.OrdinalIgnoreCase)))
+            {
+                return responseJson;
+            }
+
+            using (var aes = Aes.Create())
+            {
+                aes.Mode = CipherMode.CBC;
+                aes.Padding = PaddingMode.PKCS7;
+                aes.Key = ComBridgeSecurity.GetEncryptionKeyBytes();
+                aes.GenerateIV();
+
+                using (var encryptor = aes.CreateEncryptor())
+                {
+                    var plainBytes = Encoding.UTF8.GetBytes(responseJson);
+                    var cipherBytes = encryptor.TransformFinalBlock(plainBytes, 0, plainBytes.Length);
+
+                    // Use camelCase to match frontend expectations
+                    var envelope = new System.Collections.Generic.Dictionary<string, object>
+                    {
+                        { "id", id },
+                        { "encryptedPayload", Convert.ToBase64String(cipherBytes) },
+                        { "iv", Convert.ToBase64String(aes.IV) }
+                    };
+
+                    return SimpleJson.Serialize(envelope);
+                }
+            }
+        }
+
+        private static bool IsEncryptedEnvelope(string messageJson)
+        {
+            try
+            {
+                var env = SimpleJson.Deserialize<Envelope>(messageJson);
+                var encPayload = env?.EncryptedPayload ?? env?.encryptedPayload;
+                return !string.IsNullOrWhiteSpace(encPayload);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Envelope for encrypted message transport. Supports both camelCase and PascalCase.
+        /// </summary>
+        private class Envelope
+        {
+            public string Id { get; set; }
+            public string encryptedPayload { get; set; }
+            public string EncryptedPayload { get; set; }
+            public string iv { get; set; }
+            public string Iv { get; set; }
         }
     }
 }

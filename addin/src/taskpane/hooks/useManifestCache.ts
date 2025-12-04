@@ -91,14 +91,7 @@ export function useManifestCache(options: UseManifestCacheOptions): UseManifestC
    */
   const applyManifestData = useCallback(
     (jobId: string, manifest: any, options?: { source?: string; message?: string }) => {
-      console.log("[applyManifestData] Applying manifest", {
-        jobId,
-        source: options?.source,
-        slideCount: manifest?.slides?.length,
-      });
-
       if (!Array.isArray(manifest?.slides)) {
-        console.warn("[applyManifestData] No slides array in manifest");
         return;
       }
 

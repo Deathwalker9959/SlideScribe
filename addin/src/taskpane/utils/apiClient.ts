@@ -35,7 +35,10 @@ export interface LoginResponse {
     id: string;
     username: string;
     email?: string;
+    full_name?: string;
   };
+  session_id?: string;
+  auth_driver?: string;
 }
 
 // Voice Settings Types
@@ -442,7 +445,7 @@ export class SlideScribeApiClient {
     formData.append("username", credentials.username);
     formData.append("password", credentials.password);
 
-    const response = await fetch(`${this.baseUrl}/token`, {
+    const response = await fetch(`${this.baseUrl}/api/v1/auth/login`, {
       method: "POST",
       body: formData,
     });
@@ -461,11 +464,13 @@ export class SlideScribeApiClient {
     return {
       access_token: data.access_token,
       token_type: data.token_type,
-      expires_in: 3600, // Default 1 hour
-      user: {
+      expires_in: data.expires_in || 3600,
+      user: data.user || {
         id: credentials.username,
         username: credentials.username,
       },
+      session_id: data.session_id,
+      auth_driver: data.auth_driver || "database",
     };
   }
 
@@ -474,7 +479,7 @@ export class SlideScribeApiClient {
       throw new Error("Not authenticated");
     }
 
-    const response = await fetch(`${this.baseUrl}/users/me`, {
+    const response = await fetch(`${this.baseUrl}/api/v1/auth/me`, {
       headers: {
         Authorization: `Bearer ${this.authToken}`,
       },
@@ -702,7 +707,6 @@ export class SlideScribeApiClient {
     this.wsConnection = new WebSocket(wsUrl);
 
     this.wsConnection.onopen = () => {
-      console.log("WebSocket connected");
       this.wsReconnectAttempts = 0;
     };
 
@@ -722,7 +726,6 @@ export class SlideScribeApiClient {
     };
 
     this.wsConnection.onclose = (event) => {
-      console.log("WebSocket closed:", event);
       onClose?.(event);
       if (!event.wasClean) {
         this.attemptReconnect(clientId, onMessage, onError, onClose);
@@ -745,9 +748,6 @@ export class SlideScribeApiClient {
     const delay = this.reconnectDelay * Math.pow(2, this.wsReconnectAttempts - 1);
 
     setTimeout(() => {
-      console.log(
-        `Attempting to reconnect (${this.wsReconnectAttempts}/${this.maxReconnectAttempts})`
-      );
       this.connectWebSocket(clientId, onMessage, onError, onClose);
     }, delay);
   }

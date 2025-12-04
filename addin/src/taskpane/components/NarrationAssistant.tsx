@@ -452,10 +452,6 @@ export function NarrationAssistant() {
 
       setStatusMessage(statusMessage);
       setLastError(null);
-
-      // Log success for debugging
-      console.log(`Narration embedding complete: ${embeddedSlides}/${totalSlides} slides processed`);
-
     } catch (error) {
       console.error("Failed to embed narration audio", error);
       let errorMessage = "Failed to embed narration audio.";
@@ -710,15 +706,12 @@ export function NarrationAssistant() {
 
   const applySlideProcessingResult = useCallback(
     (slideId: string, result: any) => {
-      console.log("[applySlideProcessingResult] Called", { slideId, result });
-
       setSlideScripts((current) =>
         current.map((slide) => {
           if (slide.slideId !== slideId) {
             return slide;
           }
 
-          console.log("[applySlideProcessingResult] Found matching slide", slide.slideId);
           const next: SlideScript = { ...slide };
           const sourceContent =
             typeof result?.original_content === "string" && result.original_content.trim().length > 0
@@ -729,15 +722,12 @@ export function NarrationAssistant() {
             typeof result?.refined_content === "string" &&
             result.refined_content.trim().length > 0
           ) {
-            console.log("[applySlideProcessingResult] Applying refined_content", result.refined_content);
             const { wordCount, durationSeconds } = calculateMetrics(result.refined_content);
             next.refinedScript = result.refined_content;
             next.wordCount = wordCount;
             next.duration = durationSeconds;
             next.updatedAt = new Date().toISOString();
             next.contentHash = computeContentHash(sourceContent);
-          } else {
-            console.log("[applySlideProcessingResult] No valid refined_content");
           }
 
           const meta = result?.contextual_metadata;

@@ -1,4 +1,6 @@
 using System;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace com_addin
 {
@@ -6,39 +8,43 @@ namespace com_addin
     {
         public const int MaxMessageBytes = 64 * 1024; // 64KB per message
         public const int MaxDownloadBytes = 25 * 1024 * 1024; // 25MB max download size
-        public const string AuthEnvVar = "SLIDESCRIBE_BRIDGE_TOKEN";
         private static string _activeToken;
         private static bool _tokenLocked;
 
         public static string InitializeToken()
         {
-            var configuredToken = Environment.GetEnvironmentVariable(AuthEnvVar);
-            _activeToken = string.IsNullOrWhiteSpace(configuredToken) ? Guid.NewGuid().ToString("N") : configuredToken;
-            _tokenLocked = !string.IsNullOrWhiteSpace(configuredToken);
+            if (string.IsNullOrWhiteSpace(_activeToken))
+            {
+                _activeToken = Guid.NewGuid().ToString("N");
+                _tokenLocked = false;
+            }
             return _activeToken;
         }
 
-        public static string GetToken() => _activeToken ?? InitializeToken();
+        public static string GetToken()
+        {
+            return _activeToken ?? InitializeToken();
+        }
 
         public static string RequestOneTimeToken()
         {
-            if (_tokenLocked)
+            // Reuse the existing token for the app lifetime to keep the encryption key stable.
+            if (string.IsNullOrWhiteSpace(_activeToken))
             {
-                throw new InvalidOperationException("Auth token already issued and locked.");
+                _activeToken = Guid.NewGuid().ToString("N");
             }
-
-            var token = GetToken();
             _tokenLocked = true;
-            return token;
+            return _activeToken;
         }
 
         public static bool IsTokenLocked => _tokenLocked;
 
         public static bool IsAuthorized(ComBridgeMessage message, out string error)
         {
+            // Allow handshake and health without a token
             if (message != null &&
-                string.Equals(message.Method, "requestauth", StringComparison.OrdinalIgnoreCase) &&
-                !_tokenLocked)
+                (string.Equals(message.Method, "requestauth", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Method, "testconnection", StringComparison.OrdinalIgnoreCase)))
             {
                 error = null;
                 return true;
@@ -77,6 +83,20 @@ namespace com_addin
             }
 
             return uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback;
+        }
+
+        public static byte[] GetEncryptionKeyBytes()
+        {
+            var token = GetToken();
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                throw new InvalidOperationException("Missing required auth token for COM Bridge encryption.");
+            }
+
+            using (var sha = SHA256.Create())
+            {
+                return sha.ComputeHash(Encoding.UTF8.GetBytes(token));
+            }
         }
     }
 }

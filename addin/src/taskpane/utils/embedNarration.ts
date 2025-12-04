@@ -212,13 +212,5 @@ export async function embedPreparedSlideAudio(
 
     // Final sync to ensure all changes are saved
     await context.sync();
-
-    // Log results for debugging
-    if (successCount > 0) {
-      console.log(`Successfully embedded audio for ${successCount} slide(s)`);
-    }
-    if (failedCount > 0) {
-      console.warn(`Failed to embed audio for ${failedCount} slide(s)`);
-    }
   });
 }
