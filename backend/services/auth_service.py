@@ -47,6 +47,7 @@ class LoginResponse(BaseModel):
 
 class AnonymousSessionResponse(BaseModel):
     """Anonymous session creation response"""
+    access_token: str
     session_id: str
     token_type: str
     expires_in: int
@@ -298,6 +299,7 @@ async def create_anonymous_session():
     token = auth_service.create_jwt_token(session_id)
 
     return AnonymousSessionResponse(
+        access_token=token,
         session_id=session_id,
         token_type="bearer",
         expires_in=auth_service.anonymous_session_expire_minutes * 60,

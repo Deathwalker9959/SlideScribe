@@ -5,6 +5,7 @@ Supports PostgreSQL for development, testing, and production environments
 
 import os
 from sqlalchemy import create_engine, text
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
@@ -78,6 +79,55 @@ def create_database_engine():
 engine = create_database_engine()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+# Async support
+async_engine = None
+AsyncSessionLocal = None
+
+
+def get_async_engine():
+    """Get or create async engine."""
+    global async_engine
+    if async_engine is None:
+        database_url = build_database_url()
+        # Convert to async URL
+        if database_url.startswith("postgresql://"):
+            database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+        async_engine = create_async_engine(
+            database_url,
+            echo=False,
+            pool_pre_ping=True,
+            pool_recycle=3600,
+            pool_size=10,
+            max_overflow=20,
+        )
+    return async_engine
+
+
+def get_async_session_local():
+    """Get or create async session factory."""
+    global AsyncSessionLocal
+    if AsyncSessionLocal is None:
+        engine = get_async_engine()
+        AsyncSessionLocal = sessionmaker(
+            engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autocommit=False,
+            autoflush=False,
+        )
+    return AsyncSessionLocal
+
+
+async def get_async_db():
+    """Dependency for FastAPI to get async database session"""
+    SessionLocal = get_async_session_local()
+    async with SessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
 
 
 def get_db():

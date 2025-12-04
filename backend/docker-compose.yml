@@ -2,12 +2,15 @@ services:
   # Main Application (Unified API Gateway)
   app:
     build: .
+    runtime: nvidia
     ports:
       - "8000:8000"
     env_file:
       - ./.env
     environment:
-      # Override for Docker-specific database URL
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # Override for Docker-specific database URL (use Docker service name)
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/pptx_tts
       - REDIS_URL=redis://redis:6379
       # Default values for optional variables
@@ -27,9 +30,10 @@ services:
       - USE_AZURE_OPENAI=${USE_AZURE_OPENAI:-true}
       - USE_AZURE_OPENAI_VISION=${USE_AZURE_OPENAI_VISION:-true}
       - DEBUG=${DEBUG:-false}
+      - CHATTERBOX_API_BASE=${CHATTERBOX_API_BASE:-http://chatterbox-tts:4123}
 
     volumes:
-      - ./shared:/app/shared
+      - ./:/app
       - ./media:/app/media
       - ./voice_profiles:/app/voice_profiles
       - ./analytics_exports:/app/analytics_exports
@@ -42,6 +46,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      chatterbox-tts:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -83,6 +89,34 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  chatterbox-tts:
+    build:
+      context: ./chatterbox_api
+    runtime: nvidia
+    ports:
+      - "4123:4123"
+    environment:
+      - EXAGGERATION=${CHATTERBOX_EXAGGERATION:-0.5}
+      - CFG_WEIGHT=${CHATTERBOX_CFG_WEIGHT:-0.5}
+      - TEMPERATURE=${CHATTERBOX_TEMPERATURE:-0.8}
+      - VOICE_SAMPLE_PATH=${CHATTERBOX_VOICE_SAMPLE_PATH:-/app/voice_profiles/default.wav}
+      - LANGUAGE=${CHATTERBOX_LANGUAGE:-el}
+      - DEVICE=cuda
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    volumes:
+      - ./voice_profiles:/app/voice_profiles
+      - ./media:/app/media
+    networks:
+      - pptx-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4123/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
 
 networks:
   pptx-network:

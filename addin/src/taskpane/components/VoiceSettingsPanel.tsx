@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { apiClient, VoiceSettings, VoiceProfile } from "@utils/apiClient";
 
-export type VoiceProvider = "azure" | "openai";
+export type VoiceProvider = "azure" | "openai" | "own";
 
 interface VoiceSettingsPanelProps {
   settings: VoiceSettings;
@@ -63,18 +63,35 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
     setError(null);
 
     try {
-      const response = await apiClient.getAvailableVoices(settings.provider);
+      if (settings.provider === "own") {
+        const profiles = await apiClient.getVoiceProfiles();
+        if (profiles.success && Array.isArray(profiles.data)) {
+          const customVoices = profiles.data
+            .filter((p: any) => (p.voice_type || p.voiceType) === "custom_cloned")
+            .map((p: any) => ({
+              id: p.voice || p.id,
+              label: p.name,
+              provider: "own" as VoiceProvider,
+              language: p.language || "en-US",
+            }));
+          if (customVoices.length > 0) {
+            setAvailableVoices(customVoices);
+          }
+        }
+      } else {
+        const response = await apiClient.getAvailableVoices(settings.provider);
 
-      if (response.success && response.data) {
-        const voices: VoiceOption[] = response.data.voices.map((voice: any) => ({
-          id: voice.name,
-          label: voice.display_name || voice.name,
-          provider: settings.provider,
-          language: voice.language || settings.language,
-        }));
+        if (response.success && response.data) {
+          const voices: VoiceOption[] = response.data.voices.map((voice: any) => ({
+            id: voice.name,
+            label: voice.display_name || voice.name,
+            provider: settings.provider,
+            language: voice.language || settings.language,
+          }));
 
-        if (voices.length > 0) {
-          setAvailableVoices(voices);
+          if (voices.length > 0) {
+            setAvailableVoices(voices);
+          }
         }
       }
     } catch (err) {
@@ -98,10 +115,12 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
     }
   };
 
-  const filteredVoices = useMemo(
-    () => availableVoices.filter((voice) => voice.provider === settings.provider),
-    [availableVoices, settings.provider]
-  );
+  const filteredVoices = useMemo(() => {
+    if (settings.provider === "own") {
+      return availableVoices.filter((voice) => voice.provider === "own");
+    }
+    return availableVoices.filter((voice) => voice.provider === settings.provider);
+  }, [availableVoices, settings.provider]);
 
   useEffect(() => {
     if (filteredVoices.length === 0) {
@@ -124,24 +143,48 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
 
     // Reload voices for the new provider
     try {
-      const response = await apiClient.getAvailableVoices(provider);
-      if (response.success && response.data) {
-        const voices: VoiceOption[] = response.data.voices.map((voice: any) => ({
-          id: voice.name,
-          label: voice.display_name || voice.name,
-          provider,
-          language: voice.language || settings.language,
-        }));
-
+      if (provider === "own") {
+        const profiles = await apiClient.getVoiceProfiles();
+        const voices =
+          profiles.success && Array.isArray(profiles.data)
+            ? profiles.data
+                .filter((p: any) => (p.voice_type || p.voiceType) === "custom_cloned")
+                .map((p: any) => ({
+                  id: p.voice || p.id,
+                  label: p.name,
+                  provider: "own" as VoiceProvider,
+                  language: p.language || settings.language,
+                }))
+            : [];
         if (voices.length > 0) {
           setAvailableVoices(voices);
-          // Auto-select first voice from new provider
           onSettingsChange({
             ...settings,
             provider,
             voice: voices[0].id,
             language: voices[0].language,
           });
+        }
+      } else {
+        const response = await apiClient.getAvailableVoices(provider);
+        if (response.success && response.data) {
+          const voices: VoiceOption[] = response.data.voices.map((voice: any) => ({
+            id: voice.name,
+            label: voice.display_name || voice.name,
+            provider,
+            language: voice.language || settings.language,
+          }));
+
+          if (voices.length > 0) {
+            setAvailableVoices(voices);
+            // Auto-select first voice from new provider
+            onSettingsChange({
+              ...settings,
+              provider,
+              voice: voices[0].id,
+              language: voices[0].language,
+            });
+          }
         }
       }
     } catch (err) {
@@ -169,12 +212,27 @@ export function VoiceSettingsPanel({ settings, onSettingsChange }: VoiceSettings
     setStatusMessage("Generating voice preview...");
 
     try {
-      const response = await apiClient.previewVoice(settings);
+      const response = await apiClient.synthesizeSpeech({
+        text: "This is your selected narration voice in action.",
+        voice: settings.voice,
+        driver: settings.provider,
+        speed: settings.speed,
+        pitch: settings.pitch,
+        volume: settings.volume,
+        language: settings.language,
+        output_format: "mp3",
+      });
 
-      if (response.success) {
+      const audioUrl =
+        (response as any)?.data?.audio_url || (response as any)?.audio_url || (response as any)?.data?.url;
+      if (audioUrl) {
+        const audio = new Audio(audioUrl);
+        await audio.play();
+        setStatusMessage("Playing voice preview...");
+      } else if (response.success) {
         setStatusMessage("Voice preview generated successfully");
       } else {
-        throw new Error(response.error || "Failed to generate preview");
+        throw new Error((response as any).error || "Failed to generate preview");
       }
     } catch (err) {
       console.error("Voice preview failed:", err);

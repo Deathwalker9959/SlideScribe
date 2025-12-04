@@ -1,16 +1,24 @@
 import os
-import time
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from database import get_async_db
 from services.auth import oauth2_scheme
-from services.ssml_builder.service import SSMLBuilder, LexiconManager
+from services.ssml_builder.service import LexiconManager, SSMLBuilder
 from services.tts_service.drivers.azure import AzureTTSEngine
+from services.tts_service.drivers.chatterbox import ChatterboxTTSEngine
 from services.tts_service.drivers.openai_tts import OpenAITTSEngine
 from services.tts_service.fallback import TTSFallbackManager
+from services.voice_profiles.manager import VoiceProfileManager, VoiceProfileNotFoundError
 from shared.models import (
-    TTSRequest, SSMLTTSRequest, EnhancedTTSRequest, SSMLRequest,
-    PronunciationLexiconRequest, PronunciationLexicon
+    EnhancedTTSRequest,
+    PronunciationLexicon,
+    PronunciationLexiconRequest,
+    SSMLRequest,
+    SSMLTTSRequest,
+    TTSRequest,
 )
 
 AZURE_SPEECH_KEY = os.environ.get("AZURE_SPEECH_KEY", "your_azure_speech_key")
@@ -20,6 +28,7 @@ MEDIA_ROOT = os.environ.get("MEDIA_ROOT", "/app/media")
 
 TTS_DRIVERS = {
     "azure": AzureTTSEngine(AZURE_SPEECH_KEY, AZURE_SPEECH_REGION),
+    "chatterbox": ChatterboxTTSEngine(),
 }
 
 # Add OpenAI driver if API key is available
@@ -34,6 +43,11 @@ lexicon_manager = LexiconManager()
 
 # Initialize fallback manager
 fallback_manager = TTSFallbackManager(TTS_DRIVERS, DEFAULT_DRIVER)
+
+
+async def get_voice_profile_manager(session: AsyncSession = Depends(get_async_db)) -> VoiceProfileManager:
+    """Get voice profile manager with async session for resolving custom voices."""
+    return VoiceProfileManager(session=session)
 
 app = FastAPI(
     title="TTS Service",
@@ -51,9 +65,31 @@ app.add_middleware(
 
 
 @app.post("/synthesize")
-async def synthesize_tts(req: TTSRequest, token: str = Depends(oauth2_scheme)):
-    """Synthesize speech with automatic provider fallback."""
+async def synthesize_tts(
+    req: TTSRequest,
+    token: str = Depends(oauth2_scheme),
+    voice_profile_manager: VoiceProfileManager = Depends(get_voice_profile_manager),
+):
+    """Synthesize speech with automatic provider fallback and custom voice detection."""
     try:
+        # Check if voice is a custom profile ID (UUID format)
+        audio_prompt_path = None
+        driver = req.driver or DEFAULT_DRIVER
+
+        if req.voice and len(req.voice) == 36:  # UUID format
+            try:
+                profile = await voice_profile_manager.get_profile(req.voice)
+                if profile.voice_type.name.lower() == "custom_cloned":
+                    audio_prompt_path = profile.audio_sample_path
+                    driver = "chatterbox"
+            except VoiceProfileNotFoundError:
+                pass
+
+        # If chatterbox is unavailable, fallback to default driver without custom prompt
+        if driver == "chatterbox" and not fallback_manager.is_driver_available("chatterbox"):
+            driver = DEFAULT_DRIVER
+            audio_prompt_path = None
+
         result = await fallback_manager.synthesize_with_fallback(
             text=req.text,
             voice=req.voice or "en-US-AriaNeural",
@@ -61,7 +97,8 @@ async def synthesize_tts(req: TTSRequest, token: str = Depends(oauth2_scheme)):
             pitch=req.pitch or 0,
             output_format=req.output_format or "mp3",
             language=req.language,
-            preferred_driver=req.driver,
+            preferred_driver=driver,
+            audio_prompt_path=audio_prompt_path,
         )
         return result
     except Exception as e:
@@ -161,6 +198,16 @@ async def synthesize_enhanced(req: EnhancedTTSRequest, token: str = Depends(oaut
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/voices")
+async def get_supported_voices(provider: str = DEFAULT_DRIVER, token: str = Depends(oauth2_scheme)):
+    """Return supported voices for a given provider."""
+    driver = TTS_DRIVERS.get(provider)
+    if not driver:
+        raise HTTPException(status_code=404, detail=f"Provider '{provider}' not found")
+    voices = getattr(driver, "SUPPORTED_VOICES", None)
+    return {"provider": provider, "voices": voices or []}
 
 
 @app.get("/drivers")

@@ -1,0 +1,30 @@
+name: chatterbox-tts
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - ffmpeg
+  - libsndfile
+  - pytorch=2.6.0
+  - pytorch-cuda=12.4  # requires an NVIDIA driver supporting CUDA 12.4
+  - pip:
+      - torchaudio==2.6.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
+      - numpy
+      - resampy==0.4.3
+      - librosa
+      - transformers==4.46.3
+      - diffusers==0.29.0
+      - resemble-perth==1.0.1
+      - omegaconf
+      - conformer
+      - safetensors
+      - pykakasi==2.3.0
+      - s3tokenizer
+      - soundfile>=0.12.1
+      - git+https://github.com/rsxdalv/chatterbox.git@faster
+      - fastapi>=0.104.0
+      - uvicorn[standard]>=0.24.0

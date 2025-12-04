@@ -186,6 +186,18 @@ class TTSFallbackManager:
 
         try:
             driver = self.drivers[driver_name]
+
+            # Convert speed to exaggeration for Chatterbox driver if not already specified
+            if driver_name == "chatterbox" and "exaggeration" not in kwargs:
+                # Chatterbox uses exaggeration (0.25-2.0) not speed
+                # Mapping: speed=0.6 -> exaggeration=0.3 (0.5 * speed_value)
+                exaggeration_value = 0.5 * speed
+                kwargs["exaggeration"] = exaggeration_value
+                logger.info(
+                    f"[FALLBACK_MGR] Converted speed={speed} to exaggeration="
+                    f"{exaggeration_value} for Chatterbox driver"
+                )
+
             result = await driver.synthesize(
                 text=text,
                 voice=voice,

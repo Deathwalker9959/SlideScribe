@@ -16,16 +16,37 @@ interface ComBridgeResponse {
   result?: any;
   error?: string;
   timestamp: string;
+  encryptedPayload?: string;
+  iv?: string;
 }
 
-const BRIDGE_TOKEN = process.env.SLIDESCRIBE_BRIDGE_TOKEN || "";
 const BRIDGE_URL = "ws://localhost:8765/slidescribe-com-bridge";
+const IS_DEV_BUILD = process.env.NODE_ENV !== "production";
+
+// Encoding helpers
+const bufferToBase64 = (buffer: ArrayBuffer) => {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  bytes.forEach((b) => (binary += String.fromCharCode(b)));
+  return typeof window !== "undefined" ? window.btoa(binary) : Buffer.from(binary, "binary").toString("base64");
+};
+
+const base64ToBuffer = (base64: string) => {
+  const binary = typeof window !== "undefined" ? window.atob(base64) : Buffer.from(base64, "base64").toString("binary");
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+};
 
 export class ComBridgeConnection {
   private static instance: ComBridgeConnection;
   private isAvailable = false;
   private socket?: WebSocket;
-  private bridgeToken: string = BRIDGE_TOKEN;
+  private rsaKeyPair: CryptoKeyPair | null = null;
+  private sessionKey: CryptoKey | null = null;
+  private handshakePromise: Promise<boolean> | null = null;
 
   private constructor() {
     this.detectComBridge();
@@ -46,9 +67,6 @@ export class ComBridgeConnection {
         Office.context.host === Office.HostType.PowerPoint;
 
       if (isInPowerPoint) {
-        if (!this.bridgeToken) {
-          console.warn("COM Bridge auth token missing; set SLIDESCRIBE_BRIDGE_TOKEN in your environment/build config.");
-        }
         this.connectToWebSocketBridge();
       } else {
         console.log("COM Bridge only available inside PowerPoint.");
@@ -71,17 +89,23 @@ export class ComBridgeConnection {
 
       this.socket.onopen = () => {
         this.isAvailable = true;
-        this.requestAuthToken().catch((error) => {
-          console.warn("COM Bridge auth token request failed:", error);
-          this.isAvailable = false;
-        });
-        this.testConnection()
+        this.handshakePromise = this.performSecureHandshake();
+        this.handshakePromise
+          .then((ok) => {
+            if (!ok) {
+              console.warn("COM Bridge handshake failed; connection disabled for safety.");
+              this.isAvailable = false;
+              return false;
+            }
+            return this.testConnection();
+          })
           .then((result) => {
             if (!result) {
               this.isAvailable = false;
             }
           })
-          .catch(() => {
+          .catch((err) => {
+            console.warn("COM Bridge initialization failed:", err);
             this.isAvailable = false;
           });
       };
@@ -89,7 +113,10 @@ export class ComBridgeConnection {
       this.socket.onclose = () => {
         this.isAvailable = false;
         setTimeout(() => {
-          if (typeof Office !== "undefined" && Office.context?.host === Office.HostType.PowerPoint) {
+          if (
+            typeof Office !== "undefined" &&
+            Office.context?.host === Office.HostType.PowerPoint
+          ) {
             this.connectToWebSocketBridge();
           }
         }, 5000);
@@ -105,6 +132,13 @@ export class ComBridgeConnection {
   }
 
   private async sendMessage(message: ComBridgeMessage): Promise<ComBridgeResponse> {
+    if (this.handshakePromise) {
+      const ok = await this.handshakePromise;
+      if (!ok) {
+        throw new Error("COM Bridge secure handshake failed.");
+      }
+    }
+
     return new Promise((resolve, reject) => {
       if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
         reject(new Error("COM Bridge WebSocket not connected"));
@@ -115,9 +149,14 @@ export class ComBridgeConnection {
         reject(new Error("COM Bridge request timeout"));
       }, 10000);
 
-      const handleMessage = (event: MessageEvent) => {
+      const handleMessage = async (event: MessageEvent) => {
         try {
-          const response: ComBridgeResponse = JSON.parse(event.data);
+          const parsed: ComBridgeResponse = JSON.parse(event.data);
+          const decrypted =
+            this.sessionKey && parsed.encryptedPayload
+              ? await this.decryptPayload(parsed.encryptedPayload, parsed.iv)
+              : null;
+          const response: ComBridgeResponse = decrypted ? JSON.parse(decrypted) : parsed;
           if (response.id === message.id) {
             clearTimeout(timeout);
             this.socket?.removeEventListener("message", handleMessage);
@@ -135,31 +174,125 @@ export class ComBridgeConnection {
         ...message,
         parameters: {
           ...(message.parameters || {}),
-          authToken: this.bridgeToken,
         },
       };
-      this.socket.send(JSON.stringify(payload));
+
+      if (this.sessionKey) {
+        this.encryptPayload(JSON.stringify(payload)).then(({ encryptedPayload, iv }) => {
+          this.socket?.send(
+            JSON.stringify({
+              id: payload.id,
+              encryptedPayload,
+              iv,
+            })
+          );
+        });
+      } else {
+        this.socket.send(JSON.stringify(payload));
+      }
     });
   }
 
-  private async requestAuthToken(): Promise<void> {
-    // Use a one-time handshake to get token if not preset
-    if (this.bridgeToken) {
-      return;
+  /**
+   * Perform an RSA + AES-GCM key exchange to secure IPC traffic.
+   * Falls back to plaintext if crypto is unavailable or handshake fails.
+   */
+  private async performSecureHandshake(): Promise<boolean> {
+    try {
+      if (typeof window === "undefined" || !window.crypto?.subtle) {
+        return false;
+      }
+
+      this.rsaKeyPair = await window.crypto.subtle.generateKey(
+        {
+          name: "RSA-OAEP",
+          modulusLength: 2048,
+          publicExponent: new Uint8Array([1, 0, 1]),
+          hash: "SHA-256",
+        },
+        true,
+        ["encrypt", "decrypt"]
+      );
+
+      const publicKeyBuffer = await window.crypto.subtle.exportKey("spki", this.rsaKeyPair.publicKey);
+      const publicKeyBase64 = bufferToBase64(publicKeyBuffer);
+
+      const response = await this.sendMessage({
+        id: `handshake_${Date.now()}`,
+        method: "negotiateSession",
+        parameters: { publicKey: publicKeyBase64 },
+        timestamp: new Date().toISOString(),
+      });
+
+      const encryptedSessionKey = response.result?.encryptedSessionKey as string | undefined;
+      const iv = response.result?.iv as string | undefined;
+      if (!response.success || !encryptedSessionKey) {
+        return false;
+      }
+
+      const decryptedKeyBuffer = await window.crypto.subtle.decrypt(
+        { name: "RSA-OAEP" },
+        this.rsaKeyPair.privateKey,
+        base64ToBuffer(encryptedSessionKey)
+      );
+
+      this.sessionKey = await window.crypto.subtle.importKey(
+        "raw",
+        decryptedKeyBuffer,
+        { name: "AES-GCM" },
+        false,
+        ["encrypt", "decrypt"]
+      );
+
+      // Optionally validate by decrypting a challenge payload
+      if (response.result?.encryptedChallenge && iv) {
+        const challenge = this.decryptPayload(response.result.encryptedChallenge, iv);
+        if (!challenge) {
+          this.sessionKey = null;
+          return false;
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.warn("Secure handshake failed:", error);
+      this.sessionKey = null;
+      this.rsaKeyPair = null;
+      return false;
     }
+  }
 
-    const response = await this.sendMessage({
-      id: `auth_${Date.now()}`,
-      method: "requestAuth",
-      parameters: {},
-      timestamp: new Date().toISOString(),
-    });
-
-    if (!response.success || !response.result) {
-      throw new Error(response.error || "Failed to obtain auth token");
+  private async encryptPayload(plaintext: string): Promise<{ encryptedPayload: string; iv: string }> {
+    if (!this.sessionKey || !window.crypto?.subtle) {
+      return { encryptedPayload: plaintext, iv: "" };
     }
+    const ivBytes = window.crypto.getRandomValues(new Uint8Array(12));
+    const encoded = new TextEncoder().encode(plaintext);
+    const cipher = await window.crypto.subtle.encrypt(
+      { name: "AES-GCM", iv: ivBytes },
+      this.sessionKey,
+      encoded
+    );
+    return { encryptedPayload: bufferToBase64(cipher), iv: bufferToBase64(ivBytes.buffer) };
+  }
 
-    this.bridgeToken = String(response.result);
+  private async decryptPayload(encryptedPayload: string, iv?: string | null): Promise<string | null> {
+    try {
+      if (!this.sessionKey || !window.crypto?.subtle || !iv) {
+        return null;
+      }
+      const cipherBuffer = base64ToBuffer(encryptedPayload);
+      const ivBuffer = base64ToBuffer(iv);
+      const data = await window.crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: new Uint8Array(ivBuffer) },
+        this.sessionKey,
+        cipherBuffer
+      );
+      return new TextDecoder().decode(data);
+    } catch (error) {
+      console.warn("Failed to decrypt COM Bridge payload:", error);
+      return null;
+    }
   }
 
   public async testConnection(): Promise<boolean> {

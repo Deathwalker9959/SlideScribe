@@ -129,6 +129,27 @@ export interface TtsResponse {
   format: string;
 }
 
+// Custom Voice Types
+export interface VoiceSampleUploadRequest {
+  name: string;
+  description?: string;
+  audio_data_base64: string;
+  audio_format: string;
+  language: string;
+  tags?: string[];
+}
+
+export interface VoiceSampleUploadResponse {
+  profile_id: string;
+  name: string;
+  voice_type: string;
+  audio_sample_path: string;
+  sample_duration: number;
+  sample_format: string;
+  status: string;
+  message: string;
+}
+
 // WebSocket Progress Types
 export interface ProgressUpdate {
   job_id: string;
@@ -150,10 +171,13 @@ export class SlideScribeApiClient {
   private baseUrl: string;
   private wsUrl: string;
   private authToken: string | null = null;
+  private sessionId: string | null = null;
   private wsConnection: WebSocket | null = null;
   private wsReconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
+  private initialized = false;
+  private initializing: Promise<void> | null = null;
 
   constructor() {
     // Determine base URL from environment or fallback
@@ -162,6 +186,9 @@ export class SlideScribeApiClient {
 
     // Load auth token from storage
     this.loadAuthToken();
+    this.loadSessionId();
+    this.ensureSessionId();
+    this.initialized = true;
   }
 
   // Enhanced authentication methods
@@ -203,18 +230,38 @@ export class SlideScribeApiClient {
   }
 
   async createAnonymousSession(): Promise<any> {
-    // Clear any existing auth token when creating anonymous session
-    this.clearAuthToken();
+    // If we already have a token, reuse it
+    if (this.authToken) {
+      return {
+        access_token: this.authToken,
+        session_id: this.sessionId,
+        token_type: "bearer",
+      };
+    }
 
     try {
-      const response = await this.request("/api/v1/auth/anonymous-session", {
+      const response = await fetch(`${this.baseUrl}/api/v1/auth/anonymous-session`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
-      return response;
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || `HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      // Persist the anonymous session token so subsequent requests are authenticated
+      if ((data as any).access_token) {
+        this.saveAuthToken((data as any).access_token);
+        if ((data as any).session_id) {
+          this.saveSessionId((data as any).session_id);
+        }
+      }
+      return data;
     } catch (error) {
       // Fallback: create a mock anonymous session
       const sessionId = `anon_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      this.saveSessionId(sessionId);
       return {
         session_id: sessionId,
         auth_driver: "none",
@@ -225,8 +272,7 @@ export class SlideScribeApiClient {
 
   async logoutWithSession(): Promise<void> {
     // For anonymous sessions, we don't need to call the logout endpoint
-    // Just clear local state
-    this.clearAuthToken();
+    // Keep local state to preserve session across reloads
     this.disconnectWebSocket();
   }
 
@@ -242,8 +288,7 @@ export class SlideScribeApiClient {
         console.warn("Logout API call failed:", error);
       }
     }
-    this.clearAuthToken();
-    this.disconnectWebSocket();
+    this.clearSessionState();
   }
 
   private resolveBaseUrl(): string {
@@ -287,6 +332,7 @@ export class SlideScribeApiClient {
   private saveAuthToken(token: string): void {
     if (typeof window !== "undefined") {
       window.localStorage.setItem("slidescribe_auth_token", token);
+      window.sessionStorage.setItem("slidescribe_auth_token", token);
       this.authToken = token;
     }
   }
@@ -294,11 +340,68 @@ export class SlideScribeApiClient {
   private clearAuthToken(): void {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("slidescribe_auth_token");
+      window.sessionStorage.removeItem("slidescribe_auth_token");
       this.authToken = null;
     }
   }
 
+  private loadSessionId(): void {
+    if (typeof window !== "undefined") {
+      this.sessionId =
+        window.localStorage.getItem("slidescribe_session_id") ||
+        window.sessionStorage.getItem("slidescribe_session_id");
+    }
+  }
+
+  private saveSessionId(sessionId: string): void {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("slidescribe_session_id", sessionId);
+      window.sessionStorage.setItem("slidescribe_session_id", sessionId);
+      this.sessionId = sessionId;
+    }
+  }
+
+  private clearSessionId(): void {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("slidescribe_session_id");
+      window.sessionStorage.removeItem("slidescribe_session_id");
+      this.sessionId = null;
+    }
+  }
+
+  private clearSessionState(): void {
+    // Do not clear auth/session automatically; preserve anonymous session across reloads
+    this.disconnectWebSocket();
+  }
+
+  private ensureSessionId(): void {
+    if (!this.sessionId) {
+      const stored =
+        (typeof window !== "undefined" && window.localStorage.getItem("slidescribe_session_id")) ||
+        (typeof window !== "undefined" && window.sessionStorage.getItem("slidescribe_session_id"));
+      if (stored) {
+        this.sessionId = stored;
+      } else {
+        const generated = `anon_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        this.saveSessionId(generated);
+      }
+    }
+  }
+
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+    // Skip auto-init on auth endpoints to avoid recursion
+    const isAuthEndpoint =
+      endpoint.startsWith("/api/v1/auth/anonymous-session") || endpoint.startsWith("/token");
+    // Lazily ensure we have an anonymous session/token once
+    if (!isAuthEndpoint && !this.authToken && !this.initializing) {
+      this.initializing = this.createAnonymousSession().finally(() => {
+        this.initializing = null;
+      });
+    }
+    if (this.initializing) {
+      await this.initializing;
+    }
+
     const url = `${this.baseUrl}${endpoint}`;
     const headers: HeadersInit = {
       "Content-Type": "application/json",
@@ -308,6 +411,10 @@ export class SlideScribeApiClient {
     // Add authentication header if token exists
     if (this.authToken) {
       headers.Authorization = `Bearer ${this.authToken}`;
+    }
+
+    if (this.sessionId) {
+      headers["X-Session-Id"] = this.sessionId;
     }
 
     try {
@@ -423,22 +530,40 @@ export class SlideScribeApiClient {
 
   // TTS Methods
   async synthesizeSpeech(request: TtsRequest): Promise<ApiResponse<TtsResponse>> {
+    const driver = this.mapProviderToDriver(request.driver);
     return this.request("/api/v1/tts/synthesize", {
       method: "POST",
-      body: JSON.stringify(request),
+      body: JSON.stringify({
+        ...request,
+        driver,
+      }),
     });
   }
 
   // Narration Methods
   async createNarrationJob(request: NarrationRequest): Promise<ApiResponse<{ job_id: string }>> {
+    const driver = this.mapProviderToDriver(request.settings.provider);
     return this.request("/api/v1/narration/process-presentation", {
       method: "POST",
-      body: JSON.stringify(request),
+      body: JSON.stringify({
+        ...request,
+        settings: {
+          ...request.settings,
+          driver,
+        },
+      }),
     });
   }
 
   async getNarrationJob(jobId: string): Promise<ApiResponse<NarrationJob>> {
     return this.request(`/api/v1/narration/job/${jobId}`);
+  }
+
+  private mapProviderToDriver(provider?: string | null): string | undefined {
+    if (!provider) return undefined;
+    if (provider === "own") return "chatterbox";
+    if (provider === "azure" || provider === "openai") return provider;
+    return undefined;
   }
 
   async getNarrationManifest(jobId: string): Promise<ApiResponse<any>> {
@@ -540,6 +665,26 @@ export class SlideScribeApiClient {
   async getAnalytics(filters?: any): Promise<ApiResponse<any>> {
     const params = filters ? `?${new URLSearchParams(filters).toString()}` : "";
     return this.request(`/api/v1/analytics${params}`);
+  }
+
+  // Custom Voice Methods
+  async uploadVoiceSample(request: VoiceSampleUploadRequest): Promise<VoiceSampleUploadResponse> {
+    const response = await this.request("/api/v1/voice-profiles/upload-sample", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return response;
+  }
+
+  async getCustomVoices(): Promise<VoiceProfile[]> {
+    const response = await this.request("/api/v1/voice-profiles/custom-voices");
+    return response;
+  }
+
+  async deleteCustomVoice(profileId: string): Promise<ApiResponse<void>> {
+    return this.request(`/api/v1/voice-profiles/custom-voices/${profileId}`, {
+      method: "DELETE",
+    });
   }
 
   // WebSocket Methods
@@ -673,4 +818,6 @@ export type {
   TtsRequest,
   TtsResponse,
   ProgressUpdate,
+  VoiceSampleUploadRequest,
+  VoiceSampleUploadResponse,
 };

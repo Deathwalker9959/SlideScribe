@@ -20,11 +20,13 @@ import { LoginView } from "@components/views/LoginView";
 import { InitialView } from "@components/views/InitialView";
 import { ScriptView } from "@components/views/ScriptView";
 import { SettingsView } from "@components/views/SettingsView";
+import { VoiceUploadPanel } from "@components/VoiceUploadPanel";
 import { NarrationHeader } from "@components/NarrationHeader";
 import { NarrationToast } from "@components/NarrationToast";
 import { NarrationStatusBar } from "@components/NarrationStatusBar";
 import { useAuth } from "../hooks/useAuth";
 import { useNavigation } from "../hooks/useNavigation";
+import { apiClient } from "../utils/apiClient";
 import { useVoiceSettings } from "../hooks/useVoiceSettings";
 import { useSlideManagement } from "../hooks/useSlideManagement";
 import { useJobTracking } from "../hooks/useJobTracking";
@@ -885,11 +887,14 @@ export function NarrationAssistant() {
 
       try {
         const requestUrl = buildBackendHttpUrl("/api/v1/tts/synthesize");
+        const authHeader = apiClient.getAuthToken()
+          ? { Authorization: `Bearer ${apiClient.getAuthToken()}` }
+          : {};
         const response = await fetch(requestUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: "Bearer test_token",
+            ...authHeader,
           },
           body: JSON.stringify({
             text: slide.refinedScript,
@@ -908,11 +913,14 @@ export function NarrationAssistant() {
         }
 
         const data = await response.json();
-        setStatusMessage(
-          data?.audio_url
-            ? "Preview generated. Audio available from backend."
-            : "Preview request completed."
-        );
+        const audioUrl = data?.audio_url;
+        if (audioUrl) {
+          const audio = new Audio(audioUrl);
+          await audio.play();
+          setStatusMessage("Playing preview audio...");
+        } else {
+          setStatusMessage("Preview request completed.");
+        }
       } catch (error) {
         console.error("Preview error", error);
         setLastError(error instanceof Error ? error.message : "Failed to generate preview.");
@@ -1105,7 +1113,9 @@ export function NarrationAssistant() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: "Bearer test_token",
+          ...(apiClient.getAuthToken()
+            ? { Authorization: `Bearer ${apiClient.getAuthToken()}` }
+            : {}),
         },
         body: JSON.stringify(payload),
       });
@@ -1666,6 +1676,7 @@ export function NarrationAssistant() {
                   buildBackendUrl={buildBackendHttpUrl}
                   disabled={disabledVoiceActions}
                   languageOptions={LANGUAGE_OPTIONS}
+                  onNavigateToVoiceUpload={() => navigateToView("custom-voice")}
                 />
               )}
               {currentView === "debug" && <DebugPanel />}
@@ -1690,6 +1701,16 @@ export function NarrationAssistant() {
                     setStatusMessage("Audio successfully embedded in PowerPoint!");
                     goToProgressView();
                   }}
+                />
+              )}
+              {currentView === "custom-voice" && (
+                <VoiceUploadPanel
+                  onVoiceCreated={(profileId) => {
+                    setStatusMessage(`Custom voice created: ${profileId}`);
+                    navigateToView("settings");
+                  }}
+                  onCancel={() => navigateToView("settings")}
+                  apiClient={apiClient}
                 />
               )}
             </LoadingOverlay>

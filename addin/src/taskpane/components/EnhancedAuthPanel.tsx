@@ -304,6 +304,25 @@ export function EnhancedAuthPanel({
   useEffect(() => {
     if (autoStart && authConfig && !authConfig.requires_auth) {
       createAnonymousSession();
+    } else if (authConfig && !authConfig.requires_auth) {
+      // Resume existing anonymous session if token exists
+      const storedSession =
+        (typeof window !== "undefined" && window.localStorage.getItem("slidescribe_session_id")) ||
+        (typeof window !== "undefined" && window.sessionStorage.getItem("slidescribe_session_id"));
+      const storedToken =
+        (typeof window !== "undefined" && window.localStorage.getItem("slidescribe_auth_token")) ||
+        (typeof window !== "undefined" && window.sessionStorage.getItem("slidescribe_auth_token"));
+      if (storedSession || storedToken) {
+        const authUser: AuthUser = {
+          id: storedSession || "anonymous",
+          username: storedSession ? `anon-${storedSession.slice(0, 6)}` : "anonymous",
+          session_id: storedSession || "anonymous",
+          auth_driver: authConfig.auth_driver || "none",
+          is_authenticated: false,
+        };
+        setCurrentUser(authUser);
+        onAuthChange?.(true, authUser, authUser.session_id);
+      }
     }
   }, [autoStart, authConfig]);
 

@@ -11,6 +11,11 @@ class VoiceGender(str, Enum):
     NEUTRAL = "neutral"
 
 
+class VoiceType(str, Enum):
+    PRESET = "preset"
+    CUSTOM_CLONED = "custom_cloned"
+
+
 class TextRefinementType(str, Enum):
     GRAMMAR = "grammar"
     STYLE = "style"
@@ -429,6 +434,9 @@ class VoiceProfileRequest(BaseModel):
     description: str | None = Field(
         None, max_length=500, description="Optional description of the voice profile"
     )
+    owner_id: str | None = Field(
+        None, description="Owner identifier (user id or anonymous session) for scoping uniqueness"
+    )
     voice: str = Field(
         default="en-US-AriaNeural",
         description="Identifier for the TTS voice (e.g. Azure neural voice id)",
@@ -445,6 +453,10 @@ class VoiceProfileRequest(BaseModel):
         None, max_length=1000, description="Sample script illustrating the desired tone"
     )
     tags: list[str] = Field(default_factory=list, description="Optional tags for categorization")
+    voice_type: VoiceType = Field(default=VoiceType.PRESET, description="Type of voice profile")
+    audio_sample_path: str | None = Field(default=None, description="Path to uploaded sample if custom")
+    cloning_provider: str | None = Field(default=None, description="Provider used for cloning")
+    sample_metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata for uploaded sample")
 
 
 class VoiceProfile(BaseModel):
@@ -462,6 +474,11 @@ class VoiceProfile(BaseModel):
     created_at: datetime
     updated_at: datetime | None = None
     last_used_at: datetime | None = None
+    voice_type: VoiceType = VoiceType.PRESET
+    audio_sample_path: str | None = None
+    cloning_provider: str | None = None
+    sample_metadata: dict[str, Any] = Field(default_factory=dict)
+    owner_id: str | None = None
 
 
 # Database Models
@@ -598,3 +615,27 @@ class ErrorResponse(BaseModel):
     error: str
     timestamp: datetime = Field(default_factory=datetime.now)
     details: dict[str, Any] | None = None
+
+
+class VoiceSampleUploadRequest(BaseModel):
+    """Request to upload custom voice sample for cloning."""
+
+    name: str = Field(..., min_length=1, max_length=100, description="Display name for the custom voice")
+    description: str | None = Field(None, max_length=500, description="Optional description")
+    audio_data_base64: str = Field(..., min_length=100, description="Base64-encoded audio file")
+    audio_format: str = Field(..., pattern="^(wav|mp3|m4a)$", description="Audio format (wav, mp3, or m4a)")
+    language: str = Field(default="en-US", description="Language code")
+    tags: list[str] = Field(default_factory=list, description="Optional tags for categorization")
+
+
+class VoiceSampleUploadResponse(BaseModel):
+    """Response after uploading custom voice sample."""
+
+    profile_id: str
+    name: str
+    voice_type: VoiceType
+    audio_sample_path: str
+    sample_duration: float
+    sample_format: str
+    status: str
+    message: str

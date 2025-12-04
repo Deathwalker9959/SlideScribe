@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { VoiceSettingsValue } from "../components/VoiceSettings";
 import { DEFAULT_VOICE_SETTINGS } from "../components/VoiceSettings";
 import type { NarrationService } from "../services/narrationService";
+import { apiClient } from "../utils/apiClient";
 
 const VOICE_SETTINGS_STORAGE_KEY = "slidescribe-voice-settings";
 
@@ -49,6 +50,7 @@ export function useVoiceSettings(
         voiceName: parsed.voiceName ?? DEFAULT_VOICE_SETTINGS.voiceName,
         speed: parsed.speed ?? DEFAULT_VOICE_SETTINGS.speed,
         pitch: parsed.pitch ?? DEFAULT_VOICE_SETTINGS.pitch,
+        exaggeration: parsed.exaggeration ?? DEFAULT_VOICE_SETTINGS.exaggeration,
         volume: parsed.volume ?? DEFAULT_VOICE_SETTINGS.volume,
         tone: parsed.tone ?? DEFAULT_VOICE_SETTINGS.tone,
         language: parsed.language ?? DEFAULT_VOICE_SETTINGS.language,
@@ -80,18 +82,36 @@ export function useVoiceSettings(
     async (settings: VoiceSettingsValue) => {
       onStatusMessage?.("Generating voice preview...");
       try {
-        await narrationService.synthesizeTTS({
+        // Build request with appropriate pitch/exaggeration based on provider
+        const baseRequest = {
           text: "This is your selected narration voice in action.",
           voice: settings.voiceName,
           driver: settings.provider,
           speed: settings.speed,
-          pitch: settings.pitch,
           volume: settings.volume,
           language: settings.language,
-          output_format: "mp3",
-        });
+          output_format: "mp3" as const,
+        };
 
-        onStatusMessage?.("Voice preview generated. Check backend media output.");
+        const request = settings.provider === "own"
+          ? { ...baseRequest, exaggeration: settings.exaggeration }
+          : { ...baseRequest, pitch: settings.pitch };
+
+        const response = await apiClient.synthesizeSpeech(request as any);
+
+        // Try to play the returned audio if available
+        const audioUrl =
+          (response as any)?.data?.audio_url ||
+          (response as any)?.audio_url ||
+          (response as any)?.data?.url;
+
+        if (audioUrl) {
+          const audio = new Audio(audioUrl);
+          await audio.play();
+          onStatusMessage?.("Playing voice preview...");
+        } else {
+          onStatusMessage?.("Voice preview generated.");
+        }
       } catch (error) {
         console.error("Voice preview error", error);
         onError?.(error instanceof Error ? error.message : "Failed to preview voice.");

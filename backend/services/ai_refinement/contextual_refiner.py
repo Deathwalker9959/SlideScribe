@@ -68,16 +68,9 @@ class ContextualRefiner:
         image_references = self._build_image_references(request.images)
         transitions = self._build_transitions(request.presentation_context)
 
-        blocks: list[str] = [base_text]
-
-        if image_references:
-            blocks.append("Visual references:")
-            blocks.extend(f"- {reference}" for reference in image_references)
-
-        if transitions:
-            blocks.append(self._format_transitions(transitions))
-
-        return "\n".join(blocks).strip(), highlights, image_references, transitions
+        # Return only the base text for TTS narration
+        # Context cues, visual references, and transitions are metadata only
+        return base_text, highlights, image_references, transitions
 
     def _extract_highlights(self, text: str) -> list[str]:
         """Return the key sentences that should be emphasised."""

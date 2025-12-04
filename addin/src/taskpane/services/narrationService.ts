@@ -70,7 +70,10 @@ export interface TTSSynthesizePayload {
  * Service for backend narration API operations
  */
 export class NarrationService {
-  constructor(private baseUrl: string, private authToken: string = "test_token") {}
+  constructor(
+    private baseUrl: string,
+    private authToken: string = "test_token"
+  ) {}
 
   /**
    * Build backend HTTP URL from path
@@ -87,7 +90,10 @@ export class NarrationService {
     for (const candidate of candidates) {
       if (!candidate) continue;
       try {
-        const url = new URL(candidate, typeof window !== "undefined" ? window.location.href : undefined);
+        const url = new URL(
+          candidate,
+          typeof window !== "undefined" ? window.location.href : undefined
+        );
         url.pathname = `${url.pathname.replace(/\/$/, "")}${normalizedPath}`;
         return url.toString();
       } catch (error) {

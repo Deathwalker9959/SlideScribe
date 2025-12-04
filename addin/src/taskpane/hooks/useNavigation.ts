@@ -1,6 +1,14 @@
 import { useState, useCallback, useEffect } from "react";
 
-export type View = "login" | "initial" | "script" | "settings" | "progress" | "export" | "debug";
+export type View =
+  | "login"
+  | "initial"
+  | "script"
+  | "settings"
+  | "progress"
+  | "export"
+  | "debug"
+  | "custom-voice";
 
 export interface UseNavigationReturn {
   currentView: View;

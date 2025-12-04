@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from services.tts_service.app import DEFAULT_DRIVER, TTS_DRIVERS
 from shared.models import TTSRequest, TTSResponse
+
+logger = logging.getLogger(__name__)
 
 
 class TTSService:
@@ -23,6 +26,13 @@ class TTSService:
         if not driver:
             raise ValueError(f"TTS driver '{driver_id}' is not configured")
 
+        logger.info("=" * 80)
+        logger.info(f"TTS SERVICE - Calling driver: {driver_id}")
+        logger.info(f"Driver type: {type(driver).__name__}")
+        logger.info(f"Request - text_len: {len(request.text)}, voice: {request.voice}")
+        logger.info(f"Request - language: {request.language}, format: {request.output_format}")
+        logger.info(f"Extra options passed to driver: {extra_options}")
+
         options = extra_options or {}
         result = await driver.synthesize(
             text=request.text,
@@ -32,6 +42,9 @@ class TTSService:
             output_format=request.output_format,
             **options,
         )
+
+        logger.info(f"TTS SERVICE - Driver returned: audio_url={result.get('audio_url')}")
+        logger.info("=" * 80)
 
         return TTSResponse(
             audio_url=result.get("audio_url", ""),

@@ -88,6 +88,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
 
       for (const slide of officeJsData.slides) {
         updatedSlideScripts[slide.slide_number] = {
+          slideNumber: slide.slide_number,
           audioUrl: `http://localhost:8000${slide.audio.file_path}`,
           subtitles: slide.subtitles,
           transcript: slide.transcript,
@@ -113,11 +114,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ jobId, job, onEmbedCom
     if (!jobId) return;
 
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/audio/exports/${jobId}`, {
-        headers: {
-          Authorization: "Bearer test_token",
-        },
-      });
+      const response = await fetch(`http://localhost:8000/api/v1/audio/exports/${jobId}`);
       if (response.ok) {
         const exportData = await response.json();
         setExports(exportData.exports || []);

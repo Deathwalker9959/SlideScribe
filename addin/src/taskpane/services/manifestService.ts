@@ -1,4 +1,8 @@
-import type { SlideAudioExport, SlideAudioTimelineEntry, SlideScript } from "../components/ScriptEditor";
+import type {
+  SlideAudioExport,
+  SlideAudioTimelineEntry,
+  SlideScript,
+} from "../components/ScriptEditor";
 import { PowerPointService } from "./powerPointService";
 
 export type ManifestCacheEntry = {
@@ -109,7 +113,11 @@ export const normalizeJobExportsResponse = (input: any): SlideAudioExport[] => {
   return normalizeAudioExports(
     input.map((item) =>
       typeof item === "object" && item
-        ? { ...item, path: item.export_path ?? item.path ?? "", download_url: item.download_url ?? item.downloadUrl }
+        ? {
+            ...item,
+            path: item.export_path ?? item.path ?? "",
+            download_url: item.download_url ?? item.downloadUrl,
+          }
         : item
     )
   );
@@ -152,7 +160,9 @@ export const applyManifestToSlides = ({
           ? remote.original_text
           : "";
     const slideContentHash = PowerPointService.computeContentHash(slide.originalText);
-    const remoteContentHash = remoteOriginal ? PowerPointService.computeContentHash(remoteOriginal) : null;
+    const remoteContentHash = remoteOriginal
+      ? PowerPointService.computeContentHash(remoteOriginal)
+      : null;
     const originalsMatch = remoteContentHash ? remoteContentHash === slideContentHash : true;
 
     let refinedScript = slide.refinedScript;

@@ -15,10 +15,7 @@ export class SlideProcessingService {
         ? result.original_content
         : slide.originalText;
 
-    if (
-      typeof result?.refined_content === "string" &&
-      result.refined_content.trim().length > 0
-    ) {
+    if (typeof result?.refined_content === "string" && result.refined_content.trim().length > 0) {
       next.refinedScript = result.refined_content;
       next.contentHash = result.content_hash ?? slide.contentHash;
     }
@@ -118,13 +115,8 @@ export class SlideProcessingService {
   /**
    * Update slide in collection
    */
-  static updateSlideInCollection(
-    slides: SlideScript[],
-    updatedSlide: SlideScript
-  ): SlideScript[] {
-    return slides.map((slide) =>
-      slide.slideId === updatedSlide.slideId ? updatedSlide : slide
-    );
+  static updateSlideInCollection(slides: SlideScript[], updatedSlide: SlideScript): SlideScript[] {
+    return slides.map((slide) => (slide.slideId === updatedSlide.slideId ? updatedSlide : slide));
   }
 
   /**

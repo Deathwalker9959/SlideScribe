@@ -136,7 +136,9 @@ export function useJobTracking(options: UseJobTrackingOptions): UseJobTrackingRe
         clearReconnectTimer();
         reconnectAttemptRef.current = 0;
         setConnectionStatus("connected");
-        onStatus?.(preserveState ? "Reconnected to progress service." : "Connected to progress service.");
+        onStatus?.(
+          preserveState ? "Reconnected to progress service." : "Connected to progress service."
+        );
         subscribeToJob(socket, trimmedJobId);
       };
 
@@ -170,7 +172,12 @@ export function useJobTracking(options: UseJobTrackingOptions): UseJobTrackingRe
             return;
           }
 
-          if (payload.result || payload.slide_result || payload.contextual_metadata || payload.audio) {
+          if (
+            payload.result ||
+            payload.slide_result ||
+            payload.contextual_metadata ||
+            payload.audio
+          ) {
             onApplyResult?.(payload);
           }
 
@@ -192,15 +199,20 @@ export function useJobTracking(options: UseJobTrackingOptions): UseJobTrackingRe
             contextConfidence: payload.contextual_metadata?.confidence,
             audioTimeline: normalizeTimeline(payload.audio?.timeline),
             audioExports: payload.audio ? normalizeAudioExports(payload.audio.exports) : undefined,
-            audioPeakDb: payload.audio?.output_peak_dbfs ?? payload.audio?.transition_output?.output_peak_dbfs,
+            audioPeakDb:
+              payload.audio?.output_peak_dbfs ?? payload.audio?.transition_output?.output_peak_dbfs,
             audioLoudnessDb:
-              payload.audio?.output_loudness_dbfs ?? payload.audio?.transition_output?.output_loudness_dbfs,
+              payload.audio?.output_loudness_dbfs ??
+              payload.audio?.transition_output?.output_loudness_dbfs,
             audioBackgroundTrack: payload.audio?.background_track_path,
           };
           appendProgressEvent(snapshot);
           onProgress(snapshot);
 
-          if ((payload.status === "completed" || snapshot.status === "completed") && payload.job_id) {
+          if (
+            (payload.status === "completed" || snapshot.status === "completed") &&
+            payload.job_id
+          ) {
             void onManifestRefresh?.(payload.job_id);
           }
         } catch (error) {
@@ -243,7 +255,20 @@ export function useJobTracking(options: UseJobTrackingOptions): UseJobTrackingRe
         }
       };
     },
-    [activeJobId, appendProgressEvent, buildWebSocketUrl, clearReconnectTimer, connectionStatus, handleSocketClose, onApplyResult, onError, onManifestRefresh, onProgress, onSetActiveJob, onStatus]
+    [
+      activeJobId,
+      appendProgressEvent,
+      buildWebSocketUrl,
+      clearReconnectTimer,
+      connectionStatus,
+      handleSocketClose,
+      onApplyResult,
+      onError,
+      onManifestRefresh,
+      onProgress,
+      onSetActiveJob,
+      onStatus,
+    ]
   );
 
   const handleStopTracking = useCallback(() => {

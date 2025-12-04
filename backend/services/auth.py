@@ -14,6 +14,8 @@ SECRET_KEY = os.getenv("SECRET_KEY", "supersecret")
 ALGORITHM = "HS256"
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
+# Optional auth scheme that allows anonymous sessions
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/token", auto_error=False)
 
 
 class User(BaseModel):

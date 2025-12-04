@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.queue import QueueManager
 from services.voice_profiles.manager import VoiceProfileManager
@@ -90,13 +91,16 @@ class ProgressUpdate(BaseModel):
 class NarrationOrchestrator:
     """Orchestrates the complete narration processing pipeline."""
 
-    def __init__(self):
+    def __init__(self, session: AsyncSession | None = None):
         configured_root = Path(config.get("media_root", "./media"))
         self.media_root = self._initialize_media_root(configured_root)
 
         # Initialize queue manager for background processing
         self.queue_manager = QueueManager()
         logger.info("Queue manager initialized")
+
+        # Store session for voice profile manager
+        self._session = session
 
         # Cache for storing job status and progress
         self.cache = Cache()
@@ -193,8 +197,8 @@ class NarrationOrchestrator:
 
     @property
     def voice_profile_manager(self) -> VoiceProfileManager:
-        if self._voice_profile_manager is None:
-            self._voice_profile_manager = VoiceProfileManager()
+        if self._voice_profile_manager is None and self._session is not None:
+            self._voice_profile_manager = VoiceProfileManager(session=self._session)
         return self._voice_profile_manager
 
     @voice_profile_manager.setter
@@ -621,7 +625,9 @@ class NarrationOrchestrator:
                 resolved[key] = value
 
         provider_value = (resolved.get("provider") or DEFAULT_PROVIDER).lower()
-        if provider_value not in {"azure", "openai"}:
+        if provider_value == "own":
+            provider_value = "chatterbox"
+        if provider_value not in {"azure", "openai", "chatterbox"}:
             provider_value = DEFAULT_PROVIDER
         resolved["provider"] = provider_value
 
@@ -871,6 +877,32 @@ class NarrationOrchestrator:
         return []
 
     @staticmethod
+    def _strip_markdown(text: str) -> str:
+        """Remove Markdown formatting from text for TTS synthesis.
+
+        TTS models expect plain text without formatting characters.
+        This removes: bold (**), italic (*/_), bullets (-), headers (#), etc.
+        """
+        import re
+
+        # Remove bold/italic markers
+        text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # **bold**
+        text = re.sub(r'\*(.+?)\*', r'\1', text)      # *italic*
+        text = re.sub(r'_(.+?)_', r'\1', text)        # _italic_
+
+        # Remove bullet points and list markers
+        text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)  # - item
+
+        # Remove headers
+        text = re.sub(r'^#+\s+', '', text, flags=re.MULTILINE)  # # Header
+
+        # Remove extra whitespace
+        text = re.sub(r'\n\s*\n', '\n', text)  # Multiple newlines
+        text = text.strip()
+
+        return text
+
+    @staticmethod
     def _write_silent_wav(path: Path, duration_seconds: float) -> None:
         sample_rate = 16000
         total_frames = int(sample_rate * duration_seconds)
@@ -889,11 +921,63 @@ class NarrationOrchestrator:
         tts_options: dict[str, Any],
     ) -> tuple[TTSResponse, str]:
         """Synthesize audio for refined text using TTS service and persist placeholder audio."""
+        logger.info(f"=== TTS OPTIONS RECEIVED for slide {slide_number} ===")
+        logger.info(f"Full tts_options: {tts_options}")
+
         voice = tts_options.get("voice", "en-US-AriaNeural")
         language = tts_options.get("language") or self._derive_language_from_voice(voice)
         speed = float(tts_options.get("speed", 1.0))
         pitch = float(tts_options.get("pitch", 0.0))
         output_format = "wav"
+        provider = tts_options.get("provider", DEFAULT_PROVIDER)
+
+        logger.info(f"Initial values - voice: {voice}, language: {language}, provider: {provider}")
+        logger.info(f"Text length: {len(text)}, text preview (raw): {text[:100]}...")
+
+        # Strip Markdown formatting for TTS (models expect plain text)
+        text = self._strip_markdown(text)
+        logger.info(f"Text after Markdown removal: {text[:100]}...")
+
+        # Resolve custom voice profiles to audio sample paths
+        audio_prompt_path = None
+        if voice and len(str(voice)) == 36:  # UUID format indicates custom profile
+            logger.info(f"🔍 Detected UUID format voice: {voice}, attempting to resolve...")
+            try:
+                from services.voice_profiles.manager import VoiceProfileNotFoundError
+
+                # Log all available profiles
+                all_profiles = await self.voice_profile_manager.list_profiles()
+                logger.info(f"📋 Available profiles: {len(all_profiles)}")
+                for p in all_profiles:
+                    logger.info(f"   - id={p.id}, voice={p.voice}, name={p.name}, voice_type={p.voice_type.name}")
+
+                profile = await self.voice_profile_manager.get_profile(voice)
+                logger.info(
+                    f"✅ Profile found: id={profile.id}, voice={profile.voice}, voice_type={profile.voice_type.name}, "
+                    f"audio_sample_path={profile.audio_sample_path}"
+                )
+
+                if profile.voice_type.name.lower() == "custom_cloned":
+                    audio_prompt_path = profile.audio_sample_path
+                    provider = "chatterbox"  # Force Chatterbox for custom voices
+
+                    # Ensure absolute path
+                    if audio_prompt_path and not Path(audio_prompt_path).is_absolute():
+                        # Relative to backend working directory
+                        audio_prompt_path = str(Path.cwd() / audio_prompt_path)
+
+                    logger.info(
+                        f"✓ Resolved custom voice profile {voice} (ID: {profile.id}) "
+                        f"to audio sample: {audio_prompt_path}"
+                    )
+                    logger.info(f"✓ Provider forced to: {provider}")
+                    logger.info(f"✓ Audio file exists: {Path(audio_prompt_path).exists()}")
+                else:
+                    logger.warning(f"⚠ Profile found but voice_type is {profile.voice_type.name}, not CUSTOM_CLONED")
+            except VoiceProfileNotFoundError as e:
+                logger.warning(f"❌ Custom voice profile {voice} not found: {e}")
+            except Exception as e:
+                logger.error(f"❌ Failed to resolve custom voice profile {voice}: {e}", exc_info=True)
 
         tts_request = TTSRequest(
             text=text,
@@ -904,13 +988,113 @@ class NarrationOrchestrator:
             language=language,
         )
 
-        response = await self.tts_service.synthesize_speech(
-            tts_request,
-            driver_name=tts_options.get("provider"),
-            extra_options={
-                "language": language,
-            },
-        )
+        extra_options = {}
+
+        # Pass audio prompt path and Chatterbox-specific parameters for voice cloning
+        if audio_prompt_path:
+            extra_options["audio_prompt_path"] = audio_prompt_path
+            # Add Chatterbox model parameters for better voice cloning
+            # cfg_weight controls how strongly the reference audio guides synthesis:
+            # - 0: Pure language transfer (ignores reference voice characteristics)
+            # - 0.5 (default): Balanced voice cloning with reference voice
+            # - 1.0: Maximum reference voice influence
+            # For Greek reference audio with Greek target text, use cfg_weight=0.5 for best results
+            target_language = language.split("-")[0].lower() if "-" in language else language.lower()
+
+            # Use moderate cfg_weight (0.5) for same-language voice cloning
+            # This preserves voice characteristics while ensuring natural Greek pronunciation
+            cfg_weight = 0.5
+            logger.info(f"ℹ Using cfg_weight=0.5 for voice cloning with {target_language} target language - balances voice preservation with natural language synthesis")
+
+            # Convert generic speed parameter to Chatterbox exaggeration parameter
+            # speed (0.5-2.0) -> exaggeration (0.25-2.0)
+            # speed=1.0 (normal) -> exaggeration=0.5 (neutral)
+            # speed=0.6 (slower) -> exaggeration=0.3 (slightly slower/less expressive)
+            # speed=2.0 (faster) -> exaggeration=1.0 (faster/more expressive)
+            speed_value = float(speed) if speed else 1.0
+            exaggeration_value = tts_options.get("exaggeration")
+            if exaggeration_value is None:
+                exaggeration_value = 0.5 * speed_value  # Convert speed to exaggeration
+                logger.info(f"[ORCHESTRATOR] Converted speed={speed_value} to exaggeration={exaggeration_value}")
+
+            extra_options["exaggeration"] = exaggeration_value
+            extra_options["temperature"] = tts_options.get("temperature", 0.8)
+            extra_options["cfg_weight"] = cfg_weight
+            extra_options["seed"] = tts_options.get("seed", 0)
+            logger.info(f"✓ Audio prompt path added to extra_options: {audio_prompt_path}")
+            logger.info(f"✓ Chatterbox parameters: exaggeration={extra_options['exaggeration']}, "
+                       f"temperature={extra_options['temperature']}, "
+                       f"cfg_weight={extra_options['cfg_weight']}, seed={extra_options['seed']}")
+            logger.info(f"ℹ Chatterbox supports speed control via 'exaggeration' (0.25-2.0). "
+                       f"Pitch control is NOT supported for custom cloned voices.")
+        else:
+            logger.warning(f"✗ No audio_prompt_path - will use default voice")
+
+        logger.info(f"=== CALLING TTS SERVICE ===")
+        logger.info(f"Provider: {provider}")
+        logger.info(f"TTSRequest: text_len={len(tts_request.text)}, voice={tts_request.voice}, "
+                   f"language={tts_request.language}, speed={tts_request.speed}, "
+                   f"pitch={tts_request.pitch}, format={tts_request.output_format}")
+        logger.info(f"[ORCHESTRATOR] FULL extra_options dict before passing to driver: {extra_options}")
+        logger.info(f"[ORCHESTRATOR] language parameter value: {language}")
+        logger.info(f"[ORCHESTRATOR] audio_prompt_path parameter value: {audio_prompt_path}")
+
+        # For custom cloned voices, call Chatterbox driver directly (no fallback)
+        if audio_prompt_path and provider == "chatterbox":
+            logger.info("Using DIRECT Chatterbox driver call (bypassing fallback manager)")
+            from services.tts_service.app import TTS_DRIVERS
+
+            chatterbox_driver = TTS_DRIVERS.get("chatterbox")
+            if not chatterbox_driver:
+                raise RuntimeError("Chatterbox driver not available")
+
+            # Pass all options including exaggeration, temperature, cfg_weight, seed, audio_prompt_path
+            logger.info(f"[ORCHESTRATOR] ===== DIRECT CHATTERBOX CALL =====")
+            logger.info(f"[ORCHESTRATOR] Positional args:")
+            logger.info(f"[ORCHESTRATOR]   text={tts_request.text[:50]}... (len={len(tts_request.text)})")
+            logger.info(f"[ORCHESTRATOR]   voice={tts_request.voice}")
+            logger.info(f"[ORCHESTRATOR]   speed={tts_request.speed}")
+            logger.info(f"[ORCHESTRATOR]   pitch={tts_request.pitch}")
+            logger.info(f"[ORCHESTRATOR]   output_format={tts_request.output_format}")
+            logger.info(f"[ORCHESTRATOR]   language={language}")
+            logger.info(f"[ORCHESTRATOR] Kwargs (**extra_options):")
+            for key, value in extra_options.items():
+                if key == "audio_prompt_path":
+                    logger.info(f"[ORCHESTRATOR]   {key}={value}")
+                else:
+                    logger.info(f"[ORCHESTRATOR]   {key}={value}")
+
+            result = await chatterbox_driver.synthesize(
+                text=tts_request.text,
+                voice=tts_request.voice,
+                speed=tts_request.speed,
+                pitch=tts_request.pitch,
+                output_format=tts_request.output_format,
+                language=language,
+                **extra_options,
+            )
+            logger.info(f"[ORCHESTRATOR] Chatterbox returned successfully")
+
+            from shared.models import TTSResponse
+            response = TTSResponse(
+                audio_url=result.get("audio_url", ""),
+                duration=float(result.get("duration", 0.0)),
+                file_size=int(result.get("file_size", 0)),
+                voice_used=result.get("voice_used", tts_request.voice),
+                processing_time=float(result.get("processing_time", 0.0)),
+                file_path=result.get("file_path"),
+            )
+        else:
+            # Use normal TTS service (with fallback)
+            logger.info("Using TTS service with fallback manager")
+            response = await self.tts_service.synthesize_speech(
+                tts_request,
+                driver_name=provider,
+                extra_options=extra_options,
+            )
+
+        logger.info(f"✓ TTS synthesis complete - duration={response.duration}s, "
+                   f"file_path={response.file_path}")
 
         audio_dir = self.media_root / job_id / "audio"
         ensure_directory(str(audio_dir))
@@ -1300,7 +1484,13 @@ class NarrationOrchestrator:
     @staticmethod
     def _serialize_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
         """Serialize metadata to ensure JSON compatibility."""
+        import math
+
         def serialize_value(value: Any) -> Any:
+            # Handle infinity and NaN (not JSON-compatible)
+            if isinstance(value, float):
+                if math.isinf(value) or math.isnan(value):
+                    return None  # Convert Infinity/NaN to null in JSON
             # Handle datetime objects
             if isinstance(value, datetime):
                 return value.isoformat()

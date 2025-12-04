@@ -67,13 +67,8 @@ export function useManifestCache(options: UseManifestCacheOptions): UseManifestC
   const [isRefreshingContext, setIsRefreshingContext] = useState(false);
   const manifestLoadedJobRef = useRef<string | null>(null);
 
-  const {
-    presentationId,
-    buildBackendUrl,
-    onStatusMessage,
-    onSlidesUpdate,
-    onAudioExportsFetch,
-  } = options;
+  const { presentationId, buildBackendUrl, onStatusMessage, onSlidesUpdate, onAudioExportsFetch } =
+    options;
 
   /**
    * Load manifest from localStorage cache

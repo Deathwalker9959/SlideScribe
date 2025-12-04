@@ -1,12 +1,14 @@
 """Narration service API endpoints for PowerPoint presentation processing."""
 
-from datetime import UTC
 import json
+from datetime import UTC
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from database import get_async_db
 from services.auth import oauth2_scheme
 from services.narration.orchestrator import NarrationOrchestrator
 from shared.models import (
@@ -35,8 +37,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize orchestrator
-orchestrator = NarrationOrchestrator()
+
+async def get_orchestrator(session: AsyncSession = Depends(get_async_db)) -> NarrationOrchestrator:
+    """Get orchestrator with async session for voice profile manager."""
+    return NarrationOrchestrator(session=session)
 
 
 @app.get("/health")
@@ -47,7 +51,9 @@ async def health_check():
 
 @app.post("/process-presentation", response_model=dict)
 async def process_presentation(
-    request: PresentationRequest, token: str = Depends(oauth2_scheme)
+    request: PresentationRequest,
+    token: str = Depends(oauth2_scheme),
+    orchestrator: NarrationOrchestrator = Depends(get_orchestrator),
 ) -> dict:
     """Start processing a presentation for narration generation.
 
@@ -87,7 +93,8 @@ async def process_presentation(
 @app.post("/process-slide", response_model=dict)
 async def process_slide(
     request: SlideProcessingRequest,
-    token: str = Depends(oauth2_scheme)
+    token: str = Depends(oauth2_scheme),
+    orchestrator: NarrationOrchestrator = Depends(get_orchestrator),
 ) -> dict:
     """Process an individual slide for narration generation.
 
@@ -148,7 +155,11 @@ async def process_slide(
 
 
 @app.get("/status/{job_id}", response_model=dict)
-async def get_job_status(job_id: str, token: str = Depends(oauth2_scheme)) -> dict:
+async def get_job_status(
+    job_id: str,
+    token: str = Depends(oauth2_scheme),
+    orchestrator: NarrationOrchestrator = Depends(get_orchestrator),
+) -> dict:
     """Get the current status and progress of a narration processing job.
 
     Returns detailed information about:
@@ -173,7 +184,11 @@ async def get_job_status(job_id: str, token: str = Depends(oauth2_scheme)) -> di
 
 
 @app.post("/cancel/{job_id}", response_model=dict)
-async def cancel_job(job_id: str, token: str = Depends(oauth2_scheme)) -> dict:
+async def cancel_job(
+    job_id: str,
+    token: str = Depends(oauth2_scheme),
+    orchestrator: NarrationOrchestrator = Depends(get_orchestrator),
+) -> dict:
     """Cancel a running narration processing job.
 
     Attempts to cancel the job if it's still in a cancellable state
@@ -235,7 +250,8 @@ async def export_presentation(
 
         from shared.utils import generate_hash
 
-        export_id = generate_hash(f"export_{request.presentation_id}_{int(datetime.now(UTC).timestamp())}")
+        timestamp = int(datetime.now(UTC).timestamp())
+        export_id = generate_hash(f"export_{request.presentation_id}_{timestamp}")
 
         logger.info(f"Created export {export_id} for presentation {request.presentation_id}")
 
@@ -255,7 +271,11 @@ async def export_presentation(
 
 
 @app.get("/manifest/{job_id}", response_model=dict)
-async def get_manifest(job_id: str, token: str = Depends(oauth2_scheme)) -> dict:
+async def get_manifest(
+    job_id: str,
+    token: str = Depends(oauth2_scheme),
+    orchestrator: NarrationOrchestrator = Depends(get_orchestrator),
+) -> dict:
     """Retrieve the export manifest for a completed narration job."""
     try:
         manifest_path = Path(orchestrator.media_root) / job_id / "manifest.json"

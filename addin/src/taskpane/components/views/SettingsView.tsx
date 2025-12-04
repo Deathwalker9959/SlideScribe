@@ -11,6 +11,7 @@ export interface SettingsViewProps {
   buildBackendUrl: (path: string) => string;
   disabled?: boolean;
   languageOptions: Array<{ code: string; name: string }>;
+  onNavigateToVoiceUpload?: () => void;
 }
 
 /**
@@ -24,6 +25,7 @@ export function SettingsView({
   buildBackendUrl,
   disabled = false,
   languageOptions,
+  onNavigateToVoiceUpload,
 }: SettingsViewProps) {
   const handleLanguageChange = () => {
     if (!languageOptions?.length) return;
@@ -66,6 +68,7 @@ export function SettingsView({
         onPreview={onVoicePreview}
         buildBackendUrl={buildBackendUrl}
         disabled={disabled}
+        onNavigateToVoiceUpload={onNavigateToVoiceUpload}
       />
     </div>
   );

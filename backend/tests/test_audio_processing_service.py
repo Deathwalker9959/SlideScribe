@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-import services.audio_processing.service as audio_service_module
 from services.audio_processing.service import AudioProcessor
 from shared.models import (
     AudioCombineRequest,
@@ -16,8 +15,6 @@ from shared.models import (
 
 
 def _silent_segment(duration_seconds: float):
-    if audio_service_module.HAS_PYDUB:
-        return audio_service_module.PydubAudioSegment.silent(duration=int(duration_seconds * 1000))
     return None
 
 
@@ -25,13 +22,6 @@ def _silent_segment(duration_seconds: float):
 async def test_combine_segments_generates_timeline(tmp_path, monkeypatch):
     processor = AudioProcessor()
     monkeypatch.setattr(processor, "media_root", tmp_path)
-
-    if audio_service_module.HAS_PYDUB:
-        monkeypatch.setattr(
-            processor,
-            "_load_audio_segment",
-            lambda segment: _silent_segment(segment.duration or 1.0),
-        )
 
     request = AudioCombineRequest(
         job_id="job-audio",
@@ -58,13 +48,6 @@ async def test_combine_segments_generates_timeline(tmp_path, monkeypatch):
 async def test_apply_transitions_updates_state(tmp_path, monkeypatch):
     processor = AudioProcessor()
     monkeypatch.setattr(processor, "media_root", tmp_path)
-
-    if audio_service_module.HAS_PYDUB:
-        monkeypatch.setattr(
-            processor,
-            "_load_audio_segment",
-            lambda segment: _silent_segment(segment.duration or 1.0),
-        )
 
     combine_request = AudioCombineRequest(
         job_id="job-transitions",
@@ -97,13 +80,6 @@ async def test_export_mix_creates_copy(tmp_path, monkeypatch):
     processor = AudioProcessor()
     monkeypatch.setattr(processor, "media_root", tmp_path)
 
-    if audio_service_module.HAS_PYDUB:
-        monkeypatch.setattr(
-            processor,
-            "_load_audio_segment",
-            lambda segment: _silent_segment(segment.duration or 1.0),
-        )
-
     request = AudioCombineRequest(
         job_id="job-export",
         presentation_id="presentation-2",
@@ -121,13 +97,6 @@ async def test_export_mix_creates_copy(tmp_path, monkeypatch):
 async def test_export_mix_supports_multiple_formats(tmp_path, monkeypatch):
     processor = AudioProcessor()
     monkeypatch.setattr(processor, "media_root", tmp_path)
-
-    if audio_service_module.HAS_PYDUB:
-        monkeypatch.setattr(
-            processor,
-            "_load_audio_segment",
-            lambda segment: _silent_segment(segment.duration or 1.0),
-        )
 
     request = AudioCombineRequest(
         job_id="job-multi",
@@ -148,7 +117,6 @@ async def test_export_mix_supports_multiple_formats(tmp_path, monkeypatch):
 async def test_combine_segments_records_background_track(tmp_path, monkeypatch):
     processor = AudioProcessor()
     monkeypatch.setattr(processor, "media_root", tmp_path)
-    monkeypatch.setattr(audio_service_module, "HAS_PYDUB", False)
 
     request = AudioCombineRequest(
         job_id="job-bg",
@@ -170,7 +138,6 @@ async def test_combine_segments_records_background_track(tmp_path, monkeypatch):
 async def test_export_mix_records_download_entry(tmp_path, monkeypatch):
     processor = AudioProcessor()
     monkeypatch.setattr(processor, "media_root", tmp_path)
-    monkeypatch.setattr(audio_service_module, "HAS_PYDUB", False)
 
     request = AudioCombineRequest(
         job_id="job-download",
@@ -203,5 +170,5 @@ def test_health_status_includes_flags(tmp_path, monkeypatch):
     processor = AudioProcessor()
     monkeypatch.setattr(processor, "media_root", tmp_path)
     health = processor.get_health_status()
-    assert "pydub_available" in health
+    assert "ffmpeg_path" in health
     assert "supported_formats" in health

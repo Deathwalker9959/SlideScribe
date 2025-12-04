@@ -70,7 +70,8 @@ export function useNarrationJob(
 
       // Filter out placeholder slides
       const sanitizedSlides = slidesForJob.filter(
-        (slide) => slide.originalText.trim() !== "Welcome to our presentation. This is the first slide."
+        (slide) =>
+          slide.originalText.trim() !== "Welcome to our presentation. This is the first slide."
       );
 
       if (sanitizedSlides.length === 0) {
@@ -173,12 +174,15 @@ export function useNarrationJob(
       }
 
       const sanitizedSlides = slidesForJob.filter(
-        (slide) => slide.originalText.trim() !== "Welcome to our presentation. This is the first slide."
+        (slide) =>
+          slide.originalText.trim() !== "Welcome to our presentation. This is the first slide."
       );
 
       if (sanitizedSlides.length === 0) {
         if (!PowerPointService.isAvailable()) {
-          throw new Error("No slides available. Open this add-in inside PowerPoint and select a slide.");
+          throw new Error(
+            "No slides available. Open this add-in inside PowerPoint and select a slide."
+          );
         }
         throw new Error("No slide content available. Make sure a slide is selected.");
       }
