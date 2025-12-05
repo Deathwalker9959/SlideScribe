@@ -91,6 +91,7 @@ export function useNarrationJob(
           typeof slide.refinedScript === "string" && slide.refinedScript.trim().length > 0;
         const useRefinedScript = hasRefinedScript && scriptHash === currentContentHash;
         const slideContent = useRefinedScript ? slide.refinedScript : slide.originalText;
+        const attachments = slide.imageAttachments ?? [];
 
         return {
           slide_id: slide.slideId,
@@ -98,7 +99,7 @@ export function useNarrationJob(
           content: slideContent,
           notes: null,
           images: includeImages
-            ? (slide.imageAttachments ?? []).map((attachment) => ({
+            ? attachments.map((attachment) => ({
                 image_id: attachment.id,
                 description: attachment.name,
                 mime_type: attachment.mimeType,

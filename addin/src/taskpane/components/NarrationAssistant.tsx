@@ -87,6 +87,49 @@ const extractSlidesFromPowerPoint = () => PowerPointService.extractSlides();
 const isPowerPointRuntime = () => PowerPointService.isAvailable();
 const getSelectedSlideNumber = () => PowerPointService.getSelectedSlideNumber();
 
+const computeJobInProgress = (
+  progress: JobProgress | null,
+  jobId: string | null,
+  startingJob: boolean,
+  startingQuickJob: boolean
+): boolean => {
+  if (startingJob || startingQuickJob) return true;
+  if (!jobId) return false;
+  if (!progress || !progress.status) return true;
+
+  const normalized = progress.status.toString().toLowerCase().replace(/[^a-z]/g, "");
+  const active =
+    normalized.includes("processing") ||
+    normalized.includes("queued") ||
+    normalized.includes("refining") ||
+    normalized.includes("synthesizing") ||
+    normalized.includes("generatingsubtitles") ||
+    normalized.includes("exporting");
+
+  return active;
+};
+
+const STEP_PROGRESS_MAP: Record<string, number> = {
+  extraction: 0.2,
+  refinement: 0.45,
+  synthesis: 0.7,
+  subtitle_generation: 0.85,
+  subtitles: 0.85,
+  export: 1,
+  exporting: 1,
+  completed: 1,
+};
+
+const normalizeProcessingStep = (step: string | null | undefined): string => {
+  if (!step) return "processing";
+  const value = step.toString().toLowerCase();
+  if (value.includes(".")) {
+    const [, suffix] = value.split(".");
+    return suffix ?? value;
+  }
+  return value.replace(/[^a-z_]/g, "_");
+};
+
 export function NarrationAssistant() {
   // Use the new job state management
   const { state: jobState, dispatch: jobDispatch } = useJobState();
@@ -215,6 +258,100 @@ export function NarrationAssistant() {
     };
   }, []);
 
+  const resetSlideProcessingState = useCallback(
+    (targetSlides?: SlideScript[]) => {
+      const targetIds = targetSlides?.map((slide) => slide.slideId);
+      setSlideScripts((current) =>
+        current.map((slide) => {
+          if (targetIds && !targetIds.includes(slide.slideId)) {
+            return slide;
+          }
+          return {
+            ...slide,
+            processingStatus: "pending",
+            processingStep: null,
+            processingProgress: 0,
+            lastProgressMessage: null,
+            lastProgressAt: null,
+          } satisfies SlideScript;
+        })
+      );
+    },
+    [setSlideScripts]
+  );
+
+  const updateSlideProcessingFromSnapshot = useCallback(
+    (snapshot: ProgressSnapshot) => {
+      const normalizedStep = normalizeProcessingStep(snapshot.currentStep);
+      const stepProgress = STEP_PROGRESS_MAP[normalizedStep] ?? 0.1;
+      const statusText = snapshot.status?.toString().toLowerCase() ?? "";
+      const isCompletedStatus =
+        statusText.includes("completed") ||
+        statusText === "jobstatus.completed" ||
+        snapshot.progress >= 0.999;
+      const isFailedStatus = statusText.includes("failed");
+      const now = new Date().toISOString();
+
+      setSlideScripts((current) =>
+        current.map((slide) => {
+          const participates =
+            !snapshot.totalSlides || snapshot.totalSlides === 0
+              ? true
+              : slide.slideNumber <= snapshot.totalSlides;
+          if (!participates) {
+            return slide;
+          }
+
+          const baseProgress =
+            typeof slide.processingProgress === "number" && Number.isFinite(slide.processingProgress)
+              ? Math.max(0, Math.min(1, slide.processingProgress))
+              : 0;
+          let nextProgress = baseProgress;
+          let nextStatus = slide.processingStatus ?? "pending";
+          let nextStep = slide.processingStep ?? null;
+          let nextMessage = slide.lastProgressMessage ?? null;
+
+          if (isFailedStatus && snapshot.currentSlide === slide.slideNumber) {
+            nextStatus = "failed";
+            nextStep = normalizedStep;
+          } else if (isCompletedStatus || snapshot.currentSlide > slide.slideNumber) {
+            nextProgress = 1;
+            nextStatus = "completed";
+            nextStep = "completed";
+          } else if (snapshot.currentSlide === slide.slideNumber) {
+            nextProgress = Math.max(baseProgress, stepProgress);
+            nextStatus = "processing";
+            nextStep = normalizedStep;
+            if (snapshot.message) {
+              nextMessage = snapshot.message;
+            }
+          } else if (snapshot.currentSlide === 0 && snapshot.progress > 0) {
+            nextStatus = "processing";
+          }
+
+          if (
+            nextProgress === baseProgress &&
+            nextStatus === slide.processingStatus &&
+            nextStep === slide.processingStep &&
+            nextMessage === slide.lastProgressMessage
+          ) {
+            return slide;
+          }
+
+          return {
+            ...slide,
+            processingProgress: nextProgress,
+            processingStatus: nextStatus,
+            processingStep: nextStep,
+            lastProgressMessage: nextMessage,
+            lastProgressAt: now,
+          } satisfies SlideScript;
+        })
+      );
+    },
+    [setSlideScripts]
+  );
+
   const buildWebSocketUrl = useCallback((clientId: string) => {
     const overrides: (string | undefined)[] = [
       window.__SLIDESCRIBE_PROGRESS_WS__,
@@ -253,6 +390,7 @@ export function NarrationAssistant() {
     buildWebSocketUrl,
     historyLimit: HISTORY_LIMIT,
     onProgress: (snapshot) => {
+      updateSlideProcessingFromSnapshot(snapshot);
       setProgressHistory((current) => {
         const next = [snapshot, ...current];
         return next.length > HISTORY_LIMIT ? next.slice(0, HISTORY_LIMIT) : next;
@@ -791,6 +929,12 @@ export function NarrationAssistant() {
             }
           }
 
+          next.processingProgress = 1;
+          next.processingStatus = "completed";
+          next.processingStep = "completed";
+          next.lastProgressAt = new Date().toISOString();
+          next.lastProgressMessage = result?.message ?? next.lastProgressMessage ?? null;
+
           return next;
         })
       );
@@ -996,13 +1140,21 @@ export function NarrationAssistant() {
         completionToastJobRef.current = null;
         setJobAudioExports([]);
         setShowCompletionSummary(false);
+        resetSlideProcessingState();
       } else {
         setLastError(null);
       }
 
       jobTracking.handleStartTracking(trimmedJobId, options);
     },
-    [jobIdInput, jobTracking.handleStartTracking, setJobAudioExports, setJobIdInput, setProgressHistory]
+    [
+      jobIdInput,
+      jobTracking.handleStartTracking,
+      resetSlideProcessingState,
+      setJobAudioExports,
+      setJobIdInput,
+      setProgressHistory,
+    ]
   );
 
   const handleStopTracking = useCallback(() => {
@@ -1054,6 +1206,7 @@ export function NarrationAssistant() {
         throw new Error("Add slide scripts before starting narration.");
       }
 
+      resetSlideProcessingState(sanitizedSlides);
       const requestUrl = buildBackendHttpUrl("/api/v1/narration/process-presentation");
       const slidesPayload = sanitizedSlides.map((slide) => {
         const slideTitle =
@@ -1151,6 +1304,7 @@ export function NarrationAssistant() {
     presentationId,
     includeImages,
     refreshSlides,
+    resetSlideProcessingState,
   ]);
 
   const startQuickNarrationForCurrentSlide = useCallback(async () => {
@@ -1193,6 +1347,7 @@ export function NarrationAssistant() {
         throw new Error("Selected slide has no content.");
       }
 
+      resetSlideProcessingState([targetSlide]);
       const requestUrl = buildBackendHttpUrl("/api/v1/narration/process-presentation");
       const slideTitle =
         targetSlide.originalText?.split(/\r?\n/)[0]?.trim() || `Slide ${targetSlide.slideNumber}`;
@@ -1281,6 +1436,7 @@ export function NarrationAssistant() {
     presentationId,
     includeImages,
     refreshSlides,
+    resetSlideProcessingState,
   ]);
 
   const latestProgress = progressHistory.length > 0 ? progressHistory[0] : null;
@@ -1646,14 +1802,13 @@ export function NarrationAssistant() {
                   onRemoveImage={handleRemoveImageAttachment}
                   onEmbedNarration={embedNarrationIntoPresentation}
                   embeddingNarration={isEmbeddingNarration}
-                  jobInProgress={
-                    isStartingJob ||
-                    isStartingQuickJob ||
-                    (activeJobId &&
-                      (!latestProgress ||
-                        latestProgress.status === "processing" ||
-                        latestProgress.status === "queued"))
-                  }
+                  jobInProgress={computeJobInProgress(
+                    latestProgress,
+                    activeJobId,
+                    isStartingJob,
+                    isStartingQuickJob
+                  )}
+                  jobCurrentSlide={latestProgress?.currentSlide ?? null}
                   isStartingQuickJob={isStartingQuickJob}
                 />
               )}

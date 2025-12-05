@@ -70,6 +70,13 @@ class ImageAnalysisService:
 
         metadata = request.metadata or {}
         job_state = None
+        if request.images:
+            self.logger.debug(
+                "Image analysis: %s image(s) for slide=%s presentation=%s",
+                len(request.images),
+                request.slide_id,
+                request.presentation_id,
+            )
 
         if request.job_id:
             job_state = {
@@ -118,6 +125,18 @@ class ImageAnalysisService:
         self._store_slide_snapshot(request, results, processing_time)
 
         response = ImageAnalysisResponse(results=results, processing_time=processing_time)
+
+        if results:
+            for result in results:
+                analysis = result.analysis
+                self.logger.debug(
+                    "Image analysis result: image_id=%s caption=%s tags=%d objects=%d callouts=%d",
+                    result.image_id,
+                    (analysis.caption or "n/a")[:120],
+                    len(analysis.tags),
+                    len(analysis.objects),
+                    len(analysis.callouts),
+                )
 
         if request.job_id:
             job_state = self.job_states.get(request.job_id, {})
@@ -175,6 +194,9 @@ class ImageAnalysisService:
 
     async def _generate_analysis(self, image: ImageData, metadata: dict[str, Any]) -> ImageAnalysis:
         """Generate analysis via provider with heuristic fallback."""
+        cleaned_base64 = self._sanitize_base64(image.content_base64)
+        if cleaned_base64 != image.content_base64:
+            image = ImageData(**{**image.model_dump(), "content_base64": cleaned_base64})
         try:
             return await self.provider.analyze(image, metadata)
         except Exception as exc:  # pragma: no cover - defensive logging path
@@ -312,6 +334,17 @@ class ImageAnalysisService:
             image_id=payload["image_id"],
             analysis=ImageAnalysis(**payload["analysis"]),
         )
+
+    @staticmethod
+    def _sanitize_base64(data: str | None) -> str | None:
+        """Strip data URL prefixes if present."""
+        if not data:
+            return data
+        if data.startswith("data:"):
+            parts = data.split("base64,", 1)
+            if len(parts) == 2:
+                return parts[1]
+        return data
 
     @staticmethod
     def _merge_unique(primary: list[str], secondary: list[str]) -> list[str]:

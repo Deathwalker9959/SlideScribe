@@ -39,6 +39,16 @@ refinement_steps:
     temperature: 0.2
     max_tokens: 1500
     enabled: true
+
+  callout_integration:
+    name: "Callout Integration"
+    description: "Blend visual callouts into narration naturally"
+    system_prompt: |
+      Follow all constraints: keep the exact line order and count (no reordering, merging, splitting, or removals). Do not add content or ideas. Maintain meaning and natural spoken style; no bullets or new formatting. Optimize for smooth, clear narration; avoid tongue-twisters; keep sentences manageable while staying on the same lines. Rephrase only within each line; do not combine concepts across lines. Outputs must be deterministic and non-creative, with standardized phrasing. Keep length per line close to the original (≤120% unless required for grammar). Return only the final text—no explanations, markdown, or lists.
+      Task (Callout Integration): weave the provided visual cue into the narration wherever it fits naturally. Do not label it as a cue. Keep the presenter tone and avoid front-loading; integrate it smoothly into the existing lines.
+    temperature: 0.2
+    max_tokens: 1200
+    enabled: true
     
   audience_adaptation:
     name: "Audience-Specific Adaptation"

@@ -77,7 +77,7 @@ class TextRefinementService:
         self.cache = Cache()
         if not refinement_config.validate_config():
             raise ValueError("Invalid refinement configuration")
-        self.logger.info(
+        self.logger.debug(
             f"Loaded {len(refinement_config.get_enabled_steps())} enabled refinement steps"
         )
         self.contextual_refiner = ContextualRefiner(logger)
@@ -103,7 +103,7 @@ class TextRefinementService:
 
             # If improvement is below threshold, return original text with low confidence
             if improvement_score < min_improvement_score and text != refined_text:
-                self.logger.info(
+                self.logger.debug(
                     f"Improvement score {improvement_score:.2f} below threshold "
                     f"{min_improvement_score:.2f}, returning original text"
                 )
@@ -176,7 +176,7 @@ class TextRefinementService:
         primary_config = refinement_config.get_ai_model_config("primary")
         primary_provider = primary_config.get("provider", "openai")
 
-        self.logger.info(f"Initializing primary AI driver: {primary_provider}")
+        self.logger.debug(f"Initializing primary AI driver: {primary_provider}")
         try:
             if primary_provider == "azure_openai":
                 self.primary_driver = AzureOpenAIRefinementDriver()
@@ -190,7 +190,7 @@ class TextRefinementService:
         fallback_config = refinement_config.get_ai_model_config("fallback")
         if fallback_config:
             fallback_provider = fallback_config.get("provider", "openai")
-            self.logger.info(f"Initializing fallback AI driver: {fallback_provider}")
+            self.logger.debug(f"Initializing fallback AI driver: {fallback_provider}")
             try:
                 if fallback_provider == "azure_openai":
                     self.fallback_driver = AzureOpenAIRefinementDriver()
@@ -222,7 +222,7 @@ class TextRefinementService:
 
         try:
             provider = primary_config.get("provider", "openai")
-            self.logger.info(f"Using {provider} provider with model: {step_config['model']}")
+            self.logger.debug(f"Using {provider} provider with model: {step_config['model']}")
 
             result = await self.primary_driver.refine(user_text, step_config)
             return result
@@ -232,7 +232,7 @@ class TextRefinementService:
             # Try fallback driver if available
             if self.fallback_driver:
                 try:
-                    self.logger.info("Attempting fallback AI driver...")
+                    self.logger.debug("Attempting fallback AI driver...")
                     fallback_config = refinement_config.get_ai_model_config("fallback")
                     step_config["model"] = fallback_config.get("model", "gpt-3.5-turbo")
 

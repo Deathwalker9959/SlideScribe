@@ -7,6 +7,7 @@ import wave
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
+import re
 from typing import Any
 
 from pydantic import BaseModel
@@ -360,7 +361,7 @@ class NarrationOrchestrator:
 
             audio_manifest: dict[str, Any] | None = None
             if audio_segments:
-                logger.info(f"Processing {len(audio_segments)} audio segments for job {job_id}")
+                logger.debug(f"Processing {len(audio_segments)} audio segments for job {job_id}")
                 combine_request = AudioCombineRequest(
                     job_id=job_id,
                     presentation_id=request.metadata.get("presentation_id", job_id) if request.metadata else job_id,
@@ -368,11 +369,11 @@ class NarrationOrchestrator:
                     output_format="wav",
                 )
                 try:
-                    logger.info(f"Combining audio segments for job {job_id}")
+                    logger.debug(f"Combining audio segments for job {job_id}")
                     combine_response = await self.audio_processor.combine_segments(combine_request)
                     audio_manifest = combine_response.model_dump()
                     audio_manifest["combined_output_path"] = audio_manifest.get("output_path")
-                    logger.info(f"Audio segments combined successfully for job {job_id}")
+                    logger.debug(f"Audio segments combined successfully for job {job_id}")
 
                     timeline_entries = audio_manifest.get("timeline") or []
                     timeline_map = {
@@ -398,7 +399,7 @@ class NarrationOrchestrator:
 
                     transitions: list[AudioTransition] = []
                     if len(audio_segments) > 1:
-                        logger.info(f"Applying {len(audio_segments) - 1} audio transitions for job {job_id}")
+                        logger.debug(f"Applying {len(audio_segments) - 1} audio transitions for job {job_id}")
                         transitions = [
                             AudioTransition(
                                 from_slide=audio_segments[i].slide_id,
@@ -419,7 +420,7 @@ class NarrationOrchestrator:
                         audio_manifest["output_path"] = transition_response.output_path
                         audio_manifest["output_peak_dbfs"] = transition_response.output_peak_dbfs
                         audio_manifest["output_loudness_dbfs"] = transition_response.output_loudness_dbfs
-                        logger.info(f"Audio transitions applied successfully for job {job_id}")
+                        logger.debug(f"Audio transitions applied successfully for job {job_id}")
 
                         await self._update_progress(
                             job_id,
@@ -441,7 +442,7 @@ class NarrationOrchestrator:
                     exports: list[dict[str, Any]] = []
                     for export_format in ("mp3", "mp4"):
                         try:
-                            logger.info(f"Exporting audio as {export_format} for job {job_id}")
+                            logger.debug(f"Exporting audio as {export_format} for job {job_id}")
                             export_response = await self.audio_processor.export_mix(
                                 AudioExportRequest(
                                     job_id=job_id,
@@ -450,7 +451,7 @@ class NarrationOrchestrator:
                                 )
                             )
                             exports.append(export_response.model_dump())
-                            logger.info(f"Audio export ({export_format}) completed for job {job_id}")
+                            logger.debug(f"Audio export ({export_format}) completed for job {job_id}")
                         except Exception as export_exc:  # pragma: no cover - best-effort conversions
                             logger.warning(
                                 "Audio export (%s) failed for job %s: %s",
@@ -469,7 +470,7 @@ class NarrationOrchestrator:
                             slide_audio.setdefault("timeline", timeline_map.get(slide_result.get("slide_id"), {}))
                             slide_audio["exports"] = exports
 
-                    logger.info(f"Audio processing completed successfully for job {job_id}")
+                    logger.debug(f"Audio processing completed successfully for job {job_id}")
 
                 except Exception as exc:
                     logger.error(f"Audio processing failed for job {job_id}: {exc}", exc_info=True)
@@ -479,17 +480,17 @@ class NarrationOrchestrator:
             await self._update_progress(job_id, ProcessingStep.EXPORT, total_slides,
                                        message="Exporting final presentation")
 
-            logger.info(f"Starting final presentation export for job {job_id}")
+            logger.debug(f"Starting final presentation export for job {job_id}")
             export_result = await self._export_presentation(job_id, processed_slides, request, audio_manifest)
-            logger.info(f"Final presentation export completed for job {job_id}")
+            logger.debug(f"Final presentation export completed for job {job_id}")
 
             # Mark job as completed
-            logger.info(f"Marking job {job_id} as completed")
+            logger.debug(f"Marking job {job_id} as completed")
             await self._update_job_status(job_id, JobStatus.COMPLETED)
             await self._update_progress_with_status(job_id, ProcessingStep.EXPORT, total_slides,
                                        JobStatus.COMPLETED, progress=1.0, message="Processing completed")
 
-            logger.info(f"Completed narration job {job_id} in {time.time():.2f}s")
+            logger.debug(f"Completed narration job {job_id} in {time.time():.2f}s")
 
         except Exception as e:
             logger.error(f"Failed to process presentation job {job_id}: {e}")
@@ -556,6 +557,21 @@ class NarrationOrchestrator:
                     contextual_request
                 )
                 refined_text = contextual_result.text
+
+                callout_hint = self._extract_callout_hint(slide.images)
+                if callout_hint:
+                    refined_text = await self._integrate_callout(refined_text, callout_hint)
+
+                # Run a final polish on the contextualized text.
+                post_context_refine = await self.ai_refinement_service.refine_text(
+                    TextRefinementRequest(
+                        text=refined_text,
+                        refinement_type=TextRefinementType.CLARITY,
+                        target_audience="presentation audience",
+                        tone="professional and engaging",
+                    )
+                )
+                refined_text = post_context_refine.refined_text
                 contextual_metadata = {
                     "highlights": contextual_result.highlights,
                     "image_references": contextual_result.image_references,
@@ -582,6 +598,75 @@ class NarrationOrchestrator:
             refined_text = refine_response.refined_text
 
         return refined_text, contextual_metadata
+
+    def _extract_callout_hint(self, images: list[ImageData]) -> str | None:
+        """Get the first meaningful callout from analyzed images."""
+        if not images:
+            return None
+
+        for image in images:
+            analysis = getattr(image, "analysis", None)
+            if not analysis or not getattr(analysis, "callouts", None):
+                continue
+            for callout in analysis.callouts:
+                if not callout:
+                    continue
+                cleaned = re.sub(r"^\s*(?:narration\s*cues?:?|callout:)\s*", "", callout, flags=re.IGNORECASE).strip()
+                if cleaned:
+                    return cleaned
+        return None
+
+    async def _integrate_callout(self, text: str, callout_hint: str) -> str:
+        """
+        Blend a visual callout into the narration naturally using a targeted refinement pass.
+        """
+        if not callout_hint:
+            return text
+
+        try:
+            from services.ai_refinement.config.config_loader import config as refinement_config
+        except Exception:
+            refinement_config = None
+
+        system_prompt = None
+        temperature = 0.2
+        max_tokens = 1200
+
+        if refinement_config:
+            step_cfg = refinement_config.get_refinement_step("callout_integration")
+            if step_cfg:
+                system_prompt = step_cfg.get("system_prompt") or system_prompt
+                temperature = step_cfg.get("temperature", temperature)
+                max_tokens = step_cfg.get("max_tokens", max_tokens)
+
+        if system_prompt is None:
+            system_prompt = (
+                "You polish spoken narration. Seamlessly weave the provided visual cue into the narration "
+                "where it fits naturally. Keep the tone like a presenter, avoid headings or bullet lists, "
+                "and do not prepend or append labels. Maintain similar length and never mention that this "
+                "came from a cue or analysis."
+            )
+
+        user_payload = (
+            "Current narration:\n"
+            f"{text.strip()}\n\n"
+            "Visual cue to integrate (refer to it naturally, not as a label):\n"
+            f"{callout_hint.strip()}"
+        )
+
+        try:
+            refined = await self.ai_refinement_service._call_ai_model(
+                system_prompt,
+                user_payload,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            if refined and refined.strip():
+                return refined.strip()
+        except Exception as exc:
+            logger.warning("Callout integration failed, keeping original narration: %s", exc)
+
+        return text
 
     async def _resolve_tts_options(self, request: PresentationRequest) -> dict[str, Any]:
         settings = request.settings or {}
@@ -695,6 +780,12 @@ class NarrationOrchestrator:
         if not missing_images:
             return
 
+        logger.debug(
+            "Triggering image analysis for slide %s: %s image(s) missing analysis",
+            slide.slide_id,
+            len(missing_images),
+        )
+
         presentation_id = None
         if presentation and presentation.metadata:
             presentation_id = presentation.metadata.get("presentation_id") or presentation.metadata.get("id")
@@ -716,6 +807,13 @@ class NarrationOrchestrator:
         response = await self.image_analysis_service.analyze_slide_images(request)
         analysis_map = {result.image_id: result.analysis for result in response.results}
         placeholder_applied = False
+
+        logger.debug(
+            "Image analysis completed for slide %s: received %s result(s) (processing_time=%.2fs)",
+            slide.slide_id,
+            len(response.results),
+            response.processing_time,
+        )
 
         for image in slide.images:
             if image.analysis is not None:
@@ -921,8 +1019,7 @@ class NarrationOrchestrator:
         tts_options: dict[str, Any],
     ) -> tuple[TTSResponse, str]:
         """Synthesize audio for refined text using TTS service and persist placeholder audio."""
-        logger.info(f"=== TTS OPTIONS RECEIVED for slide {slide_number} ===")
-        logger.info(f"Full tts_options: {tts_options}")
+        logger.debug(f"TTS options received for slide {slide_number}")
 
         voice = tts_options.get("voice", "en-US-AriaNeural")
         language = tts_options.get("language") or self._derive_language_from_voice(voice)
@@ -931,30 +1028,33 @@ class NarrationOrchestrator:
         output_format = "wav"
         provider = tts_options.get("provider", DEFAULT_PROVIDER)
 
-        logger.info(f"Initial values - voice: {voice}, language: {language}, provider: {provider}")
-        logger.info(f"Text length: {len(text)}, text preview (raw): {text[:100]}...")
+        logger.debug(f"Initial TTS values - voice: {voice}, language: {language}, provider: {provider}")
+        logger.debug(f"Text length: {len(text)}, text preview (raw): {text[:100]}...")
 
         # Strip Markdown formatting for TTS (models expect plain text)
         text = self._strip_markdown(text)
-        logger.info(f"Text after Markdown removal: {text[:100]}...")
+        logger.debug(f"Text after Markdown removal: {text[:100]}...")
 
         # Resolve custom voice profiles to audio sample paths
         audio_prompt_path = None
         if voice and len(str(voice)) == 36:  # UUID format indicates custom profile
-            logger.info(f"🔍 Detected UUID format voice: {voice}, attempting to resolve...")
+            logger.debug("Detected UUID format voice: %s, attempting to resolve...", voice)
             try:
                 from services.voice_profiles.manager import VoiceProfileNotFoundError
 
                 # Log all available profiles
                 all_profiles = await self.voice_profile_manager.list_profiles()
-                logger.info(f"📋 Available profiles: {len(all_profiles)}")
+                logger.debug("Available profiles: %s", len(all_profiles))
                 for p in all_profiles:
-                    logger.info(f"   - id={p.id}, voice={p.voice}, name={p.name}, voice_type={p.voice_type.name}")
+                    logger.debug("   - id=%s, voice=%s, name=%s, voice_type=%s", p.id, p.voice, p.name, p.voice_type.name)
 
                 profile = await self.voice_profile_manager.get_profile(voice)
-                logger.info(
-                    f"✅ Profile found: id={profile.id}, voice={profile.voice}, voice_type={profile.voice_type.name}, "
-                    f"audio_sample_path={profile.audio_sample_path}"
+                logger.debug(
+                    "Profile found: id=%s, voice=%s, voice_type=%s, audio_sample_path=%s",
+                    profile.id,
+                    profile.voice,
+                    profile.voice_type.name,
+                    profile.audio_sample_path,
                 )
 
                 if profile.voice_type.name.lower() == "custom_cloned":
@@ -966,18 +1066,20 @@ class NarrationOrchestrator:
                         # Relative to backend working directory
                         audio_prompt_path = str(Path.cwd() / audio_prompt_path)
 
-                    logger.info(
-                        f"✓ Resolved custom voice profile {voice} (ID: {profile.id}) "
-                        f"to audio sample: {audio_prompt_path}"
+                    logger.debug(
+                        "Resolved custom voice profile %s (ID: %s) to audio sample: %s",
+                        voice,
+                        profile.id,
+                        audio_prompt_path,
                     )
-                    logger.info(f"✓ Provider forced to: {provider}")
-                    logger.info(f"✓ Audio file exists: {Path(audio_prompt_path).exists()}")
+                    logger.debug("Provider forced to: %s", provider)
+                    logger.debug("Audio file exists: %s", Path(audio_prompt_path).exists())
                 else:
-                    logger.warning(f"⚠ Profile found but voice_type is {profile.voice_type.name}, not CUSTOM_CLONED")
+                    logger.debug("Profile found but voice_type is %s, not CUSTOM_CLONED", profile.voice_type.name)
             except VoiceProfileNotFoundError as e:
-                logger.warning(f"❌ Custom voice profile {voice} not found: {e}")
+                logger.debug("Custom voice profile %s not found: %s", voice, e)
             except Exception as e:
-                logger.error(f"❌ Failed to resolve custom voice profile {voice}: {e}", exc_info=True)
+                logger.debug("Failed to resolve custom voice profile %s: %s", voice, e, exc_info=True)
 
         tts_request = TTSRequest(
             text=text,
@@ -1004,7 +1106,7 @@ class NarrationOrchestrator:
             # Use moderate cfg_weight (0.5) for same-language voice cloning
             # This preserves voice characteristics while ensuring natural Greek pronunciation
             cfg_weight = 0.5
-            logger.info(f"ℹ Using cfg_weight=0.5 for voice cloning with {target_language} target language - balances voice preservation with natural language synthesis")
+            logger.debug("Using cfg_weight=0.5 for voice cloning with %s target language", target_language)
 
             # Convert generic speed parameter to Chatterbox exaggeration parameter
             # speed (0.5-2.0) -> exaggeration (0.25-2.0)
@@ -1015,33 +1117,37 @@ class NarrationOrchestrator:
             exaggeration_value = tts_options.get("exaggeration")
             if exaggeration_value is None:
                 exaggeration_value = 0.5 * speed_value  # Convert speed to exaggeration
-                logger.info(f"[ORCHESTRATOR] Converted speed={speed_value} to exaggeration={exaggeration_value}")
+                logger.debug("Converted speed=%s to exaggeration=%s", speed_value, exaggeration_value)
 
             extra_options["exaggeration"] = exaggeration_value
             extra_options["temperature"] = tts_options.get("temperature", 0.8)
             extra_options["cfg_weight"] = cfg_weight
             extra_options["seed"] = tts_options.get("seed", 0)
-            logger.info(f"✓ Audio prompt path added to extra_options: {audio_prompt_path}")
-            logger.info(f"✓ Chatterbox parameters: exaggeration={extra_options['exaggeration']}, "
-                       f"temperature={extra_options['temperature']}, "
-                       f"cfg_weight={extra_options['cfg_weight']}, seed={extra_options['seed']}")
-            logger.info(f"ℹ Chatterbox supports speed control via 'exaggeration' (0.25-2.0). "
-                       f"Pitch control is NOT supported for custom cloned voices.")
+            logger.debug(
+                "Audio prompt path set; Chatterbox params: exaggeration=%s, temperature=%s, cfg_weight=%s, seed=%s",
+                extra_options["exaggeration"],
+                extra_options["temperature"],
+                extra_options["cfg_weight"],
+                extra_options["seed"],
+            )
         else:
-            logger.warning(f"✗ No audio_prompt_path - will use default voice")
+            logger.debug("No audio_prompt_path - using default voice")
 
-        logger.info(f"=== CALLING TTS SERVICE ===")
-        logger.info(f"Provider: {provider}")
-        logger.info(f"TTSRequest: text_len={len(tts_request.text)}, voice={tts_request.voice}, "
-                   f"language={tts_request.language}, speed={tts_request.speed}, "
-                   f"pitch={tts_request.pitch}, format={tts_request.output_format}")
-        logger.info(f"[ORCHESTRATOR] FULL extra_options dict before passing to driver: {extra_options}")
-        logger.info(f"[ORCHESTRATOR] language parameter value: {language}")
-        logger.info(f"[ORCHESTRATOR] audio_prompt_path parameter value: {audio_prompt_path}")
+        logger.debug("Calling TTS service")
+        logger.debug(
+            "TTSRequest: text_len=%s, voice=%s, language=%s, speed=%s, pitch=%s, format=%s",
+            len(tts_request.text),
+            tts_request.voice,
+            tts_request.language,
+            tts_request.speed,
+            tts_request.pitch,
+            tts_request.output_format,
+        )
+        logger.debug("[ORCHESTRATOR] extra_options: %s", extra_options)
 
         # For custom cloned voices, call Chatterbox driver directly (no fallback)
         if audio_prompt_path and provider == "chatterbox":
-            logger.info("Using DIRECT Chatterbox driver call (bypassing fallback manager)")
+            logger.debug("Using direct Chatterbox driver call (bypassing fallback manager)")
             from services.tts_service.app import TTS_DRIVERS
 
             chatterbox_driver = TTS_DRIVERS.get("chatterbox")
@@ -1049,20 +1155,7 @@ class NarrationOrchestrator:
                 raise RuntimeError("Chatterbox driver not available")
 
             # Pass all options including exaggeration, temperature, cfg_weight, seed, audio_prompt_path
-            logger.info(f"[ORCHESTRATOR] ===== DIRECT CHATTERBOX CALL =====")
-            logger.info(f"[ORCHESTRATOR] Positional args:")
-            logger.info(f"[ORCHESTRATOR]   text={tts_request.text[:50]}... (len={len(tts_request.text)})")
-            logger.info(f"[ORCHESTRATOR]   voice={tts_request.voice}")
-            logger.info(f"[ORCHESTRATOR]   speed={tts_request.speed}")
-            logger.info(f"[ORCHESTRATOR]   pitch={tts_request.pitch}")
-            logger.info(f"[ORCHESTRATOR]   output_format={tts_request.output_format}")
-            logger.info(f"[ORCHESTRATOR]   language={language}")
-            logger.info(f"[ORCHESTRATOR] Kwargs (**extra_options):")
-            for key, value in extra_options.items():
-                if key == "audio_prompt_path":
-                    logger.info(f"[ORCHESTRATOR]   {key}={value}")
-                else:
-                    logger.info(f"[ORCHESTRATOR]   {key}={value}")
+            logger.debug("[ORCHESTRATOR] Direct Chatterbox call with kwargs: %s", extra_options)
 
             result = await chatterbox_driver.synthesize(
                 text=tts_request.text,
@@ -1073,7 +1166,7 @@ class NarrationOrchestrator:
                 language=language,
                 **extra_options,
             )
-            logger.info(f"[ORCHESTRATOR] Chatterbox returned successfully")
+            logger.debug("[ORCHESTRATOR] Chatterbox returned successfully")
 
             from shared.models import TTSResponse
             response = TTSResponse(
@@ -1086,15 +1179,18 @@ class NarrationOrchestrator:
             )
         else:
             # Use normal TTS service (with fallback)
-            logger.info("Using TTS service with fallback manager")
+            logger.debug("Using TTS service with fallback manager")
             response = await self.tts_service.synthesize_speech(
                 tts_request,
                 driver_name=provider,
                 extra_options=extra_options,
             )
 
-        logger.info(f"✓ TTS synthesis complete - duration={response.duration}s, "
-                   f"file_path={response.file_path}")
+        logger.debug(
+            "TTS synthesis complete - duration=%ss, file_path=%s",
+            response.duration,
+            response.file_path,
+        )
 
         audio_dir = self.media_root / job_id / "audio"
         ensure_directory(str(audio_dir))
@@ -1144,17 +1240,17 @@ class NarrationOrchestrator:
         export_dir = Path(self.media_root) / job_id
         export_dir = export_dir.resolve()  # Convert to absolute path
 
-        logger.info(f"Creating export directory: {export_dir}")
+        logger.debug(f"Creating export directory: {export_dir}")
         export_dir.mkdir(parents=True, exist_ok=True)
 
         if not export_dir.exists():
             raise FileNotFoundError(f"Failed to create export directory: {export_dir}")
 
-        logger.info(f"Export directory created/verified: {export_dir}")
+        logger.debug(f"Export directory created/verified: {export_dir}")
 
         # Create export manifest - serialize slides immediately
         try:
-            logger.info(f"Serializing {len(processed_slides)} processed slides for job {job_id}")
+            logger.debug(f"Serializing {len(processed_slides)} processed slides for job {job_id}")
             serialized_slides = self._serialize_metadata({"slides": processed_slides})["slides"]
         except Exception as e:
             logger.error(f"Failed to serialize processed slides for job {job_id}: {e}", exc_info=True)
@@ -1190,9 +1286,9 @@ class NarrationOrchestrator:
         manifest_path = export_dir / "manifest.json"
         import json
         try:
-            logger.info(f"Saving export manifest for job {job_id}")
+            logger.debug(f"Saving export manifest for job {job_id}")
             manifest_path.write_text(json.dumps(export_data, indent=2), encoding="utf-8")
-            logger.info(f"Export manifest saved successfully for job {job_id}")
+            logger.debug(f"Export manifest saved successfully for job {job_id}")
         except Exception as e:
             logger.error(f"Failed to save export manifest for job {job_id}: {e}", exc_info=True)
             # Last resort: save minimal manifest
@@ -1216,15 +1312,15 @@ class NarrationOrchestrator:
         office_js_path = export_dir / "office_js_data.json"
         import json
         try:
-            logger.info(f"Saving Office.js data to: {office_js_path}")
-            logger.info(f"Export directory exists: {export_dir.exists()}, directory: {export_dir}")
+            logger.debug(f"Saving Office.js data to: {office_js_path}")
+            logger.debug(f"Export directory exists: {export_dir.exists()}, directory: {export_dir}")
 
             office_js_path.write_text(json.dumps(self._serialize_metadata(office_js_data), indent=2), encoding="utf-8")
 
             # Verify file was created
             if office_js_path.exists():
                 file_size = office_js_path.stat().st_size
-                logger.info(f"Office.js data saved successfully for job {job_id}, size: {file_size} bytes")
+                logger.debug(f"Office.js data saved successfully for job {job_id}, size: {file_size} bytes")
             else:
                 logger.error(f"Office.js data file was not created at {office_js_path}")
                 raise FileNotFoundError(f"Failed to create Office.js data file at {office_js_path}")
@@ -1242,7 +1338,7 @@ class NarrationOrchestrator:
                 }
                 office_js_path.write_text(json.dumps(self._serialize_metadata(fallback_data), indent=2), encoding="utf-8")
                 file_size = office_js_path.stat().st_size
-                logger.info(f"Created fallback Office.js data for job {job_id}")
+                logger.debug(f"Created fallback Office.js data for job {job_id}")
             except Exception as fallback_error:
                 logger.error(f"Failed to create fallback Office.js data: {fallback_error}")
                 file_size = 0
@@ -1265,7 +1361,7 @@ class NarrationOrchestrator:
     ) -> dict[str, Any]:
         """Prepare data structure for Office.js audio embedding in PowerPoint add-in."""
         try:
-            logger.info(f"Preparing Office.js data for job {job_id}")
+            logger.debug(f"Preparing Office.js data for job {job_id}")
 
             office_js_data = {
                 "job_id": job_id,
@@ -1306,7 +1402,7 @@ class NarrationOrchestrator:
 
                 office_js_data["slides"].append(slide_info)
 
-            logger.info(f"Prepared Office.js data for {len(office_js_data['slides'])} slides")
+            logger.debug(f"Prepared Office.js data for {len(office_js_data['slides'])} slides")
             return office_js_data
 
         except Exception as e:

@@ -33,6 +33,7 @@ export interface ScriptViewProps {
   onEmbedNarration: () => Promise<void>;
   embeddingNarration: boolean;
   jobInProgress: boolean;
+  jobCurrentSlide?: number | null;
   isStartingQuickJob: boolean;
 }
 
@@ -62,6 +63,7 @@ export function ScriptView({
   onEmbedNarration,
   embeddingNarration,
   jobInProgress,
+  jobCurrentSlide,
   isStartingQuickJob,
 }: ScriptViewProps) {
   return (
@@ -122,6 +124,7 @@ export function ScriptView({
         onEmbedNarration={onEmbedNarration}
         embeddingNarration={embeddingNarration}
         jobInProgress={jobInProgress}
+        jobCurrentSlide={jobCurrentSlide}
       />
     </div>
   );

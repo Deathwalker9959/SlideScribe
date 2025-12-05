@@ -49,20 +49,55 @@ export function useSlideImages(autoLoad = true): UseSlideImagesResult {
           shapes.items.forEach((shape: any) => {
             if (shape.type === "Image") {
               imageCount += 1;
-              collected.push({
-                slideNumber: i + 1,
-                imageIndex: imageCount,
-                base64: "placeholder-base64-data",
-                format: "png",
-                width: shape.width,
-                height: shape.height,
-                name: shape.name,
-              });
+              if (typeof shape.getBase64Image === "function") {
+                const base64Result = shape.getBase64Image();
+                collected.push({
+                  slideNumber: i + 1,
+                  imageIndex: imageCount,
+                  base64Promise: base64Result,
+                  format: "png",
+                  width: shape.width,
+                  height: shape.height,
+                  name: shape.name,
+                } as any);
+              }
             }
           });
+
+          // Fallback: slide image if no per-shape captures
+          if (imageCount === 0 && typeof slide.getImageAsBase64 === "function") {
+            const slideImg = slide.getImageAsBase64();
+            collected.push({
+              slideNumber: i + 1,
+              imageIndex: 1,
+              base64Promise: slideImg,
+              format: "png",
+              name: `slide-${i + 1}-image`,
+            } as any);
+          }
         }
 
-        setImages(collected);
+        // Now sync to resolve base64 promises
+        await context.sync();
+
+        const resolved = collected
+          .map((item: any) => {
+            if (!item.base64Promise || !item.base64Promise.value) {
+              return null;
+            }
+            return {
+              slideNumber: item.slideNumber,
+              imageIndex: item.imageIndex,
+              base64: item.base64Promise.value as string,
+              format: item.format,
+              width: item.width,
+              height: item.height,
+              name: item.name,
+            } as SlideImagePreview;
+          })
+          .filter(Boolean) as SlideImagePreview[];
+
+        setImages(resolved);
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

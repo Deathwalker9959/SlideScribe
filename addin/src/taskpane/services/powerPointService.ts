@@ -46,6 +46,7 @@ export class PowerPointService {
           const textContent = await PowerPointService.extractSlideText(slide, context);
           const fallbackText = `Slide ${i + 1}: ${slide.title || "Untitled"}`;
           const slideText = textContent || fallbackText;
+          const imageAttachments = await PowerPointService.extractSlideImages(slide, context, i + 1);
 
           const { wordCount, durationSeconds } = PowerPointService.calculateMetrics(slideText);
           const slideData: SlideScript = {
@@ -60,6 +61,7 @@ export class PowerPointService {
             contextualHighlights: [],
             contextualCallouts: [],
             imageReferences: [],
+            imageAttachments,
             contextualTransitions: {},
             contextConfidence: null,
             audioUrl: null,
@@ -119,6 +121,58 @@ export class PowerPointService {
       console.error("Error extracting text from slide:", error);
       return "";
     }
+  }
+
+  /**
+   * Extract images (base64) from a slide.
+   * Note: Office.js support varies by platform; this uses getBase64Image() when available.
+   */
+  private static async extractSlideImages(
+    slide: any,
+    context: any,
+    slideNumber: number
+  ): Promise<
+    Array<{
+      id: string;
+      name?: string;
+      mimeType: string;
+      base64: string;
+      width?: number;
+      height?: number;
+      slideNumber: number;
+    }>
+  > {
+    const attachments: Array<{
+      id: string;
+      name?: string;
+      mimeType: string;
+      base64: string;
+      width?: number;
+      height?: number;
+      slideNumber: number;
+    }> = [];
+
+    try {
+      // Use slide-level render; shape-level extraction is not reliable on this host.
+      if (typeof (slide as any).getImageAsBase64 === "function") {
+        const slideImg = (slide as any).getImageAsBase64({ format: "png" } as any);
+        await context.sync();
+        const base64 = slideImg?.value as string;
+        if (base64 && typeof base64 === "string") {
+          attachments.push({
+            id: `${slideNumber}-slide`,
+            name: `slide-${slideNumber}-render`,
+            mimeType: "image/png",
+            base64,
+            slideNumber,
+          });
+        }
+      }
+    } catch (error) {
+      console.warn("Error extracting slide images:", error);
+    }
+
+    return attachments;
   }
 
   /**

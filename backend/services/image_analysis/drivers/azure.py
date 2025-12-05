@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 from typing import Any
 
 import aiohttp
@@ -11,6 +12,8 @@ from shared.models import ImageAnalysis, ImageData
 from shared.utils import config as service_config
 
 from .base import ImageAnalysisProvider
+
+logger = logging.getLogger(__name__)
 
 
 class AzureVisionProvider(ImageAnalysisProvider):
@@ -115,7 +118,7 @@ class AzureVisionProvider(ImageAnalysisProvider):
 
         confidence = caption_confidence if caption_confidence is not None else 0.8
 
-        return ImageAnalysis(
+        analysis = ImageAnalysis(
             caption=caption_text or "Azure Vision description unavailable",
             confidence=min(0.95, max(0.6, confidence)),
             tags=list(dict.fromkeys(combined_tags)),
@@ -128,6 +131,18 @@ class AzureVisionProvider(ImageAnalysisProvider):
             dominant_colors=dominant_colors,
             raw_metadata=payload,
         )
+
+        logger.info(
+            "Azure Vision: caption=%s tags=%d objects=%d callouts=%d chart_insights=%d table_insights=%d",
+            (caption_text or "n/a")[:120],
+            len(analysis.tags),
+            len(analysis.objects),
+            len(analysis.callouts),
+            len(analysis.chart_insights),
+            len(analysis.table_insights),
+        )
+
+        return analysis
 
     @staticmethod
     def _format_region(rectangle: dict[str, Any]) -> str:

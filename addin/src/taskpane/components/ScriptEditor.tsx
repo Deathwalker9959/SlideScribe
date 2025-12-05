@@ -37,6 +37,11 @@ export interface SlideScript {
   refinedScript: string;
   duration: number; // seconds
   wordCount: number;
+  processingStatus?: "pending" | "processing" | "completed" | "failed";
+  processingStep?: string | null;
+  processingProgress?: number;
+  lastProgressMessage?: string | null;
+  lastProgressAt?: string | null;
   /**
    * Hash of the slide text the current refinedScript was generated from.
    * Used to avoid reusing narration against stale slide content.
@@ -85,6 +90,7 @@ interface ScriptEditorProps {
   onEmbedNarration?: () => Promise<void> | void;
   embeddingNarration?: boolean;
   jobInProgress?: boolean;
+  jobCurrentSlide?: number | null;
 }
 
 const REFINEMENT_OPTIONS: { label: string; value: RefinementMode }[] = [
@@ -92,6 +98,33 @@ const REFINEMENT_OPTIONS: { label: string; value: RefinementMode }[] = [
   { label: "Clarity Boost", value: "clarity" },
   { label: "Tone Adjust", value: "tone" },
 ];
+
+const STEP_LABELS: Record<string, string> = {
+  extraction: "Extracting",
+  refinement: "Refining",
+  synthesis: "Synthesizing",
+  subtitle_generation: "Subtitles",
+  export: "Exporting",
+  exporting: "Exporting",
+  completed: "Completed",
+};
+
+function clampProgress(value: number | undefined): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value ?? 0));
+}
+
+function formatProcessingLabel(step?: string | null, status?: SlideScript["processingStatus"]) {
+  if (status === "completed") return "Completed";
+  if (!step) return status === "processing" ? "Processing" : "Pending";
+  const normalized = step.toLowerCase();
+  if (STEP_LABELS[normalized]) return STEP_LABELS[normalized];
+  return step
+    .replace(/processingstep\.?/i, "")
+    .replace(/[_-]/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .trim();
+}
 
 export function ScriptEditor({
   slides,
@@ -106,6 +139,7 @@ export function ScriptEditor({
   onEmbedNarration,
   embeddingNarration,
   jobInProgress = false,
+  jobCurrentSlide = null,
 }: ScriptEditorProps) {
   const [selectedSlideId, setSelectedSlideId] = useState<string | null>(slides[0]?.slideId ?? null);
   const [refinementMode, setRefinementMode] = useState<RefinementMode>("style");
@@ -177,9 +211,36 @@ export function ScriptEditor({
 
   const { images, loading: imagesLoading, error: imagesError, refresh: refreshImages } =
     useSlideImages(true);
-  const selectedSlideImages = images.filter(
-    (image) => image.slideNumber === selectedSlide.slideNumber
-  );
+
+  const attachmentImages =
+    selectedSlide.imageAttachments?.map((attachment, index) => ({
+      slideNumber: selectedSlide.slideNumber,
+      imageIndex: index + 1,
+      base64: attachment.base64,
+      format: attachment.mimeType?.split("/").pop() || "png",
+      name: attachment.name,
+      width: undefined,
+      height: undefined,
+    })) ?? [];
+
+  const selectedSlideImages =
+    attachmentImages.length > 0
+      ? attachmentImages
+      : images.filter((image) => image.slideNumber === selectedSlide.slideNumber);
+
+  useEffect(() => {
+    // Debug log to confirm when the UI should display spinners
+    console.log(
+      "[ScriptEditor] jobInProgress",
+      jobInProgress,
+      "selectedSlide",
+      selectedSlide?.slideId,
+      "previewing",
+      isPreviewing,
+      "refining",
+      isRefining
+    );
+  }, [jobInProgress, selectedSlide?.slideId, isPreviewing, isRefining]);
 
   return (
     <div className="script-editor">
@@ -188,6 +249,15 @@ export function ScriptEditor({
           <ul className="script-editor__list">
             {slides.map((slide) => {
               const active = slide.slideId === selectedSlide.slideId;
+              const slideProgress = clampProgress(slide.processingProgress);
+              const showProgress = slideProgress > 0 || (jobInProgress && !!slide.processingStatus);
+              const slideBusy =
+                slide.processingStatus === "processing" ||
+                (jobInProgress && jobCurrentSlide === slide.slideNumber);
+              const progressLabel = formatProcessingLabel(
+                slide.processingStep,
+                slide.processingStatus
+              );
               return (
                 <li key={slide.slideId}>
                   <button
@@ -196,17 +266,34 @@ export function ScriptEditor({
                     onClick={() => setSelectedSlideId(slide.slideId)}
                   >
                     <div className="script-editor__list-header">
-                      <span>Slide {slide.slideNumber}</span>
-                      <Badge variant="secondary">{slide.wordCount} words</Badge>
-                    </div>
-                    <p className="script-editor__list-preview">
-                      {(slide.refinedScript || slide.originalText).slice(0, 80) || "No script yet"}
-                    </p>
-                    <div className="script-editor__list-meta">
-                      <span>{slide.duration}s</span>
-                      {slide.updatedAt && (
-                        <span>Updated {new Date(slide.updatedAt).toLocaleTimeString()}</span>
+                        <span>Slide {slide.slideNumber}</span>
+                        <Badge variant="secondary">{slide.wordCount} words</Badge>
+                        {slideBusy && <Loader2 className="script-editor__list-spinner" />}
+                      </div>
+                      <p className="script-editor__list-preview">
+                        {(slide.refinedScript || slide.originalText).slice(0, 80) || "No script yet"}
+                      </p>
+                      {showProgress && (
+                        <div className="script-editor__list-progress">
+                          <div className="script-editor__progress-bar">
+                            <div
+                              className="script-editor__progress-bar-fill"
+                              style={{ width: `${Math.round(slideProgress * 100)}%` }}
+                            />
+                          </div>
+                          <div className="script-editor__progress-row">
+                            <span className="script-editor__progress-label">{progressLabel}</span>
+                            <span className="script-editor__progress-value">
+                              {Math.round(slideProgress * 100)}%
+                            </span>
+                          </div>
+                        </div>
                       )}
+                      <div className="script-editor__list-meta">
+                        <span>{slide.duration}s</span>
+                        {slide.updatedAt && (
+                          <span>Updated {new Date(slide.updatedAt).toLocaleTimeString()}</span>
+                        )}
                     </div>
                   </button>
                 </li>
@@ -483,15 +570,23 @@ export function ScriptEditor({
                 selectedSlideImages.map((image) => (
                   <div key={`${image.slideNumber}-${image.imageIndex}`} className="script-editor__image-preview">
                     <div className="script-editor__image-thumb">
-                      <span className="script-editor__image-fallback">
-                        Image {image.imageIndex}
-                      </span>
+                      <img
+                        src={
+                          image.base64?.startsWith("data:")
+                            ? image.base64
+                            : `data:image/${image.format || "png"};base64,${image.base64 ?? ""}`
+                        }
+                        alt={image.name || `Slide ${image.slideNumber} image ${image.imageIndex}`}
+                        className="script-editor__image-thumb-img"
+                        loading="lazy"
+                        style={{ objectFit: "cover" }}
+                      />
                     </div>
                     <div className="script-editor__image-meta">
                       <strong>{image.name || `Image ${image.imageIndex}`}</strong>
                       <span>
                         {image.width ? `${Math.round(image.width)}px` : ""}{" "}
-                        {image.height ? `Ã— ${Math.round(image.height)}px` : ""}
+                        {image.height ? `x ${Math.round(image.height)}px` : ""}
                       </span>
                     </div>
                   </div>
